@@ -1,5 +1,6 @@
 import { ApiError, UnauthorizedError } from "yandex-book-api-ts";
 import { describe, expect, it, vi } from "vitest";
+import { createProviderBook } from "../../src/core/models";
 import { createYandexBooksProvider, type YandexClient } from "../../src/providers/yandex";
 
 const client = (overrides: Partial<YandexClient> = {}): YandexClient => ({
@@ -26,6 +27,77 @@ const fullPageOf = (count: number, state = "pending"): readonly LibraryCardFixtu
 
 const fullPageWithoutTextBookIds = (count: number): readonly { readonly book: { readonly uuid: string } }[] =>
   Array.from({ length: count }, () => ({ book: { uuid: "  " } }));
+
+interface QuoteFixture {
+  readonly itemUuid: string;
+  readonly cfi: string;
+  readonly startNodeXpath: string;
+  readonly startNodeOffset: number;
+  readonly finishNodeXpath: string;
+  readonly finishNodeOffset: number;
+  readonly content: string;
+  readonly comment: string;
+  readonly progress: number;
+  readonly createdAt: number;
+  readonly book: { readonly uuid?: string };
+}
+
+const quote = ({
+  bookId = "book-1",
+  itemUuid = "unstable-item-uuid",
+  cfi = "epubcfi(/6/2)",
+  startNodeXpath = "/html/body/p[1]",
+  startNodeOffset = 0,
+  finishNodeXpath = "/html/body/p[1]",
+  finishNodeOffset = 9,
+  content = "quote",
+  comment = "comment",
+  progress = 0.5,
+  createdAt = 1_700_000_000,
+}: Partial<{
+  readonly bookId: string | undefined;
+  readonly itemUuid: string;
+  readonly cfi: string;
+  readonly startNodeXpath: string;
+  readonly startNodeOffset: number;
+  readonly finishNodeXpath: string;
+  readonly finishNodeOffset: number;
+  readonly content: string;
+  readonly comment: string;
+  readonly progress: number;
+  readonly createdAt: number;
+}> = {}): QuoteFixture => ({
+  itemUuid,
+  cfi,
+  startNodeXpath,
+  startNodeOffset,
+  finishNodeXpath,
+  finishNodeOffset,
+  content,
+  comment,
+  progress,
+  createdAt,
+  book: { uuid: bookId },
+});
+
+const fullQuotePageOf = (count: number, bookId: string, prefix = "quote"): readonly QuoteFixture[] =>
+  Array.from({ length: count }, (_value, index) => quote({
+    bookId,
+    itemUuid: `unstable-item-${prefix}-${String(index + 1)}`,
+    content: `${prefix}-${String(index + 1)}`,
+  }));
+
+const selectedBook = createProviderBook({
+  providerId: "yandex-books",
+  bookId: "book-1",
+  title: "Selected book",
+  authors: [],
+});
+
+const providerFor = (overrides: Partial<YandexClient> = {}): ReturnType<typeof createYandexBooksProvider> => createYandexBooksProvider(() => client({
+  getProfile: () => Promise.resolve({ login: "reader" }),
+  ...overrides,
+}));
 
 describe("Yandex Books provider credential validation", () => {
   it("accepts a profile with a non-blank login", async () => {
@@ -124,5 +196,73 @@ describe("Yandex Books provider library", () => {
       status: "unknown",
     })] });
     if (result.ok) expect(result.value[0]).not.toHaveProperty("progress");
+  });
+});
+
+describe("Yandex Books provider quote pagination", () => {
+  it("uses the authenticated profile login and stops after a short quote page", async () => {
+    const getUserQuotes = vi.fn<YandexClient["getUserQuotes"]>()
+      .mockResolvedValueOnce(fullQuotePageOf(100, "book-1"))
+      .mockResolvedValueOnce([quote({ bookId: "book-1", content: "last" })]);
+
+    const result = await providerFor({ getUserQuotes }).fetchAnnotations("secret", selectedBook);
+
+    expect(getUserQuotes).toHaveBeenNthCalledWith(1, "reader", 1, 100);
+    expect(getUserQuotes).toHaveBeenNthCalledWith(2, "reader", 2, 100);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(Array.isArray(result.value)).toBe(true);
+  });
+
+  it("preserves identical records on one page", async () => {
+    const duplicate = quote({ bookId: "book-1", content: "same" });
+
+    const result = await providerFor({ getUserQuotes: () => Promise.resolve([duplicate, duplicate]) })
+      .fetchAnnotations("secret", selectedBook);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value.map(({ inputIndex }) => inputIndex)).toEqual([0, 1]);
+  });
+
+  it.each<readonly [string, readonly (readonly unknown[])[]]>([
+    ["a repeated full page", [fullQuotePageOf(100, "book-1"), fullQuotePageOf(100, "book-1")]],
+    ["a cross-page fingerprint overlap despite different item UUIDs", [
+      fullQuotePageOf(100, "book-1"),
+      [quote({ bookId: "book-1", content: "quote-1", itemUuid: "another-unstable-item" })],
+    ]],
+    ["a malformed page", [{} as unknown as readonly unknown[]]],
+    ["a full page with no new normalized fingerprint", [
+      fullQuotePageOf(100, "book-1"),
+      [...fullQuotePageOf(100, "book-1")].reverse(),
+    ]],
+  ] as const)("fails rather than returning a partial snapshot on %s", async (_name, pages) => {
+    const result = await providerFor({
+      getUserQuotes: (_login, page) => Promise.resolve(pages[(page ?? 1) - 1] ?? []),
+    }).fetchAnnotations("secret", selectedBook);
+
+    expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
+  });
+
+  it("fails after the 100-page quote limit", async () => {
+    const getUserQuotes = vi.fn<YandexClient["getUserQuotes"]>((_login, page) =>
+      Promise.resolve(fullQuotePageOf(100, "book-1", `page-${String(page)}`)),
+    );
+
+    const result = await providerFor({ getUserQuotes }).fetchAnnotations("secret", selectedBook);
+
+    expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
+    expect(getUserQuotes).toHaveBeenCalledTimes(100);
+    expect(getUserQuotes).toHaveBeenLastCalledWith("reader", 100, 100);
+  });
+
+  it.each([undefined, { login: "  " }] as const)("rejects a missing or blank profile login without fetching quotes", async (profile) => {
+    const getUserQuotes = vi.fn<YandexClient["getUserQuotes"]>();
+
+    const result = await providerFor({
+      getProfile: () => Promise.resolve(profile),
+      getUserQuotes,
+    }).fetchAnnotations("secret", selectedBook);
+
+    expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
+    expect(getUserQuotes).not.toHaveBeenCalled();
   });
 });

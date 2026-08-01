@@ -1,5 +1,5 @@
 import { ApiError, UnauthorizedError } from "yandex-book-api-ts";
-import { createProviderBook, type ProviderBook } from "../core/models";
+import { createProviderBook, type BookAnnotation, type ProviderBook } from "../core/models";
 import {
   failure,
   ok,
@@ -39,6 +39,8 @@ const libraryStatus = (state: unknown): "in-progress" | "finished" | "unknown" =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const isUnknownArray = (value: unknown): value is readonly unknown[] => Array.isArray(value);
+
 const normalizedText = (value: unknown): string =>
   typeof value === "string" ? value.trim() : "";
 
@@ -53,6 +55,30 @@ const libraryPageSignature = (page: readonly unknown[]): string => JSON.stringif
     typeof progress === "number" && Number.isFinite(progress) ? String(progress) : "",
   ];
 }));
+
+const normalizedNumber = (value: unknown): string =>
+  typeof value === "number" && Number.isFinite(value) ? String(value) : "";
+
+const quoteFingerprint = (quote: unknown): string => {
+  const record = isRecord(quote) ? quote : undefined;
+  const book = isRecord(record?.book) ? record.book : undefined;
+
+  return JSON.stringify([
+    normalizedText(book?.uuid),
+    normalizedText(record?.content),
+    normalizedText(record?.comment),
+    normalizedText(record?.cfi),
+    normalizedText(record?.startNodeXpath),
+    normalizedNumber(record?.startNodeOffset),
+    normalizedText(record?.finishNodeXpath),
+    normalizedNumber(record?.finishNodeOffset),
+    normalizedNumber(record?.progress),
+    normalizedNumber(record?.createdAt),
+  ]);
+};
+
+const mapCollectedQuotes = (quotes: readonly unknown[]): readonly BookAnnotation[] =>
+  Object.freeze(quotes.map((_quote, inputIndex) => Object.freeze({ inputIndex })));
 
 export const createYandexBooksProvider = (
   createClient: (credential: string) => YandexClient,
@@ -112,5 +138,42 @@ export const createYandexBooksProvider = (
       return credentialError(error);
     }
   },
-  fetchAnnotations: () => Promise.resolve(providerError("provider-unavailable")),
+  fetchAnnotations: async (credential): Promise<ProviderResult<readonly BookAnnotation[]>> => {
+    try {
+      const client = createClient(credential);
+      const profile = await client.getProfile();
+      const login = normalizedText(profile?.login);
+      if (!login) return providerError("incomplete-data");
+
+      const quotes: unknown[] = [];
+      const pageSignatures = new Set<string>();
+      const acceptedFingerprints = new Set<string>();
+
+      for (let pageIndex = 1; pageIndex <= MAX_PAGES; pageIndex += 1) {
+        const page: unknown = await client.getUserQuotes(login, pageIndex, PAGE_SIZE);
+        if (!isUnknownArray(page)) return providerError("incomplete-data");
+
+        const fingerprints = page.map(quoteFingerprint);
+        const isFullPage = page.length === PAGE_SIZE;
+        const signature = isFullPage ? JSON.stringify(fingerprints) : undefined;
+        if (signature !== undefined && pageSignatures.has(signature)) return providerError("incomplete-data");
+        if (fingerprints.some((fingerprint) => acceptedFingerprints.has(fingerprint))) {
+          return providerError("incomplete-data");
+        }
+
+        const newFingerprints = new Set(fingerprints);
+        if (isFullPage && newFingerprints.size === 0) return providerError("incomplete-data");
+
+        if (signature !== undefined) pageSignatures.add(signature);
+        for (const fingerprint of newFingerprints) acceptedFingerprints.add(fingerprint);
+        quotes.push(...page);
+
+        if (!isFullPage) return ok(mapCollectedQuotes(quotes));
+      }
+
+      return providerError("incomplete-data");
+    } catch (error) {
+      return credentialError(error);
+    }
+  },
 });
