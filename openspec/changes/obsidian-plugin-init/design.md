@@ -12,10 +12,10 @@ Stakeholders are Obsidian users importing their own reading data, plugin maintai
 
 Source artifacts are `proposal.md` for intent and the three capability files under `specs/` for required behavior.
 
-Assumptions to verify before provider implementation proceeds:
+Compatibility conditions before provider implementation proceeds:
 
 - Yandex pagination can be proven complete by a short final page and stable page contents.
-- The authenticated profile exposes one identifier that `getUserQuotes()` accepts consistently.
+- The authenticated profile exposes a non-blank `login` that `getUserQuotes()` accepts consistently. Live verification found no usable `profile.uuid`, and the numeric `profile.id` returned `404 NotFound` from both `getUser()` and `getUserQuotes()`.
 - Importable quotes identify their owning book by `quote.book.uuid`.
 - Obsidian SecretStorage and the supplied package behave consistently enough on desktop and mobile to meet the shared feature contract.
 
@@ -304,15 +304,15 @@ Alternatives considered:
 
 The Yandex adapter imports `YandexBookClient` from the checked-in file dependency and owns all package-specific mapping.
 
-Credential testing uses `getProfile()` and maps `UnauthorizedError` to authentication failure. A resolved `undefined` profile or blank `profile.uuid` is an unusable-provider-response failure, not a successful test. Other `ApiError` values become provider rejection or unavailability errors without exposing safe details unless explicitly allowlisted. Unknown errors become an unavailable-provider error and are never logged with the credential.
+Credential testing uses `getProfile()` and maps `UnauthorizedError` to authentication failure. A resolved `undefined` profile or blank `profile.login` is an unusable-provider-response failure, not a successful test. Other `ApiError` values become provider rejection or unavailability errors without exposing safe details unless explicitly allowlisted. Unknown errors become an unavailable-provider error and are never logged with the credential.
 
 Library loading calls `getMyLibrary(pageSize, offset)` until a short page is returned. It tracks page signatures and normalized book IDs, rejects a full repeated page or a page that makes no progress, and imposes a documented maximum as protection against an inconsistent upstream response. Reaching any guard is a hard incomplete-data error; the adapter never returns a prefix as a complete library. A `LibraryCard` without a stable text-book UUID is excluded with a diagnostic count; audiobook and comic-only cards are outside scope.
 
 The adapter normalizes provider state and reading progress into `in-progress`, `finished`, `unread`, or `unknown`. The mapping table is implementation-blocking until the compatibility spike records sanitized examples and confirms the progress scale. After that gate, unknown provider state values remain `unknown`; they are not guessed. The core presents groups in the specified order: in-progress, finished, then unread/unknown.
 
-Yandex supports early fetching only after the compatibility spike proves identity and pagination behavior. The adapter calls `getProfile()` and requires a non-blank `profile.uuid`; it does not guess another identity. If that UUID does not satisfy `getUserQuotes(userId)`, implementation stops for an upstream authenticated-user quotes operation.
+Yandex supports early fetching only after the compatibility spike proves identity and pagination behavior. The adapter calls `getProfile()` and requires a non-blank `profile.login`, the identifier verified to satisfy `getUserQuotes(userId)`. It does not fall back to `profile.id` or `profile.uuid`: the numeric ID returned `404 NotFound` from user endpoints, and the verified profile supplied no usable UUID. If the login no longer satisfies `getUserQuotes(userId)`, implementation stops for an upstream authenticated-user quotes operation.
 
-Quote loading pages through `getUserQuotes(profile.uuid, page, pageSize)` until a short page. It tracks page signatures. With a verified stable source key, repeated keys are accepted only when their normalized records are identical and one copy is retained; conflicting values for one key fail the snapshot. Without such a key, identical-looking records within one page are preserved, but the same normalized fingerprint appearing on different pages is an ambiguous overlap and hard-fails the snapshot. A repeated full page, no-progress page, malformed pagination, or the documented maximum also produces a hard incomplete-snapshot error. No partial **Import Snapshot** reaches note rendering.
+Quote loading pages through `getUserQuotes(profile.login, page, pageSize)` until a short page. It tracks page signatures. With a verified stable source key, repeated keys are accepted only when their normalized records are identical and one copy is retained; conflicting values for one key fail the snapshot. Without such a key, identical-looking records within one page are preserved, but the same normalized fingerprint appearing on different pages is an ambiguous overlap and hard-fails the snapshot. A repeated full page, no-progress page, malformed pagination, or the documented maximum also produces a hard incomplete-snapshot error. No partial **Import Snapshot** reaches note rendering.
 
 The authoritative quote association is `quote.book.uuid === selectedBook.bookId`. An otherwise importable quote without `quote.book.uuid` makes the snapshot incomplete and fails the import rather than being silently dropped or attributed from another field. Account-wide quote pages are held only for the current wizard run and discarded when the modal closes or the selected provider changes.
 
@@ -427,9 +427,12 @@ There is no existing plugin code or persisted state to migrate.
 
 The first settings payload uses schema version `1`. Disabling or uninstalling the first release leaves generated notes as ordinary Markdown. Users should clear provider credentials before uninstalling if they want the stored secret value blanked. First-release rollback consists of disabling or uninstalling the plugin; existing notes do not require conversion.
 
+## Resolved Questions
+
+For the verified account, `getProfile().login` is accepted by `getUserQuotes(userId)`. The numeric `profile.id` returns `404 NotFound`, and no usable `profile.uuid` is returned, so the adapter uses only the non-blank login for account-wide quote retrieval.
+
 ## Open Questions
 
-- Does `getProfile().uuid` satisfy the `getUserQuotes(userId)` identifier contract for every tested Yandex account, or must the upstream package expose an explicit authenticated-user quotes operation?
 - What exact `LibraryCard.state` values and `readingProgress` scale are returned for in-progress, finished, and unread books? The compatibility spike must capture sanitized examples before finalizing the mapping.
 - Do Yandex REST requests made by the package's global `fetch` succeed in both Obsidian desktop and mobile? A failure requires an upstream release that exposes fetch injection or another compatible transport.
 - Does writing an empty value through SecretStorage provide the expected Clear behavior on both platforms? If not, the minimum Obsidian version or settings interaction must be revisited before implementation continues.
