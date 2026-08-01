@@ -1,4 +1,20 @@
 {
+  "obsidianDesktop": {
+    "obsidianVersion": "1.12.7",
+    "installerVersion": "1.8.10",
+    "operatingSystem": null,
+    "result": {
+      "stage": "profile",
+      "errorType": "ApiError",
+      "reason": "transport",
+      "httpStatus": null
+    },
+    "operations": {
+      "profile": "failed-before-response",
+      "library": "not-run",
+      "quotes": "not-run"
+    }
+  },
   "library": {
     "pageSize": 100,
     "count": 20,

@@ -433,8 +433,9 @@ For the verified account, `getProfile().login` is accepted by `getUserQuotes(use
 
 A sanitized live sample returned quote page counts `[20, 20, 0]`, repeated the first page consistently, and supplied `quote.book.uuid` for all 40 importable records. All 40 records supplied `itemUuid`, but only three values were unique, so `itemUuid` is not a quote source key; pagination uses normalized fingerprints and cross-page overlap rejection instead. The library sample contained `reading`, `finished`, and `pending` states. Only `reading` to `in-progress` and `finished` to `finished` are proven mappings; `pending` remains `unknown`. No numeric `readingProgress` values were observed, so no progress scale is defined. Sanitized fixture data is stored in `tests/fixtures/yandex/runtime-observations.json`.
 
+The unmodified package failed its Obsidian desktop gate on Obsidian `1.12.7` with installer `1.8.10`; the operating system was not recorded. `getProfile()` produced an `ApiError` transport failure with no HTTP status, while the same credential and package call succeeded under Node. `getMyLibrary()` and `getUserQuotes()` were not reached in Obsidian. This proves a pre-response incompatibility between the package's global-fetch transport and the tested Obsidian desktop runtime and triggers the upstream replacement-package stop condition. Mobile compatibility remains untested because either-runtime failure is already blocking.
+
 ## Open Questions
 
-- Do Yandex REST requests made by the package's global `fetch` succeed in both Obsidian desktop and mobile? A failure requires an upstream release that exposes fetch injection or another compatible transport.
 - Does writing an empty value through SecretStorage provide the expected Clear behavior on both platforms? If not, the minimum Obsidian version or settings interaction must be revisited before implementation continues.
 - ADR review should determine whether the hexagonal provider boundary, SecretStorage requirement, and upstream-package ownership warrant separate durable repository-level ADRs. There are no existing ADRs to supersede.
