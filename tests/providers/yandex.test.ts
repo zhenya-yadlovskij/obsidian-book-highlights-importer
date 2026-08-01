@@ -75,13 +75,27 @@ describe("Yandex Books provider library", () => {
   it.each<readonly [string, readonly (readonly unknown[])[]]>([
     ["repeats a full page", [fullPageOf(100), fullPageOf(100)]],
     ["receives no usable books in a full page", [fullPageWithoutTextBookIds(100)]],
-    ["reaches the page limit", Array.from({ length: 101 }, () => fullPageOf(100))],
   ])("rejects incomplete library data when it %s", async (_name, pages) => {
     const result = await createYandexBooksProvider(() => client({
       getMyLibrary: (_limit, offset) => Promise.resolve(pages[(offset ?? 0) / 100] ?? []),
     })).listBooks("secret");
 
     expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
+  });
+
+  it("rejects after 100 distinct full pages", async () => {
+    const getMyLibrary = vi.fn<YandexClient["getMyLibrary"]>((_limit, offset) => {
+      const firstBookId = (offset ?? 0) + 1;
+      return Promise.resolve(Array.from(
+        { length: 100 },
+        (_value, index) => card(`book-${String(firstBookId + index)}`),
+      ));
+    });
+    const result = await createYandexBooksProvider(() => client({ getMyLibrary })).listBooks("secret");
+
+    expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
+    expect(getMyLibrary).toHaveBeenCalledTimes(100);
+    expect(getMyLibrary).toHaveBeenLastCalledWith(100, 9_900);
   });
 
   it("rejects a malformed non-array library response", async () => {
