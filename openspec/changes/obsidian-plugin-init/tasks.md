@@ -1,7 +1,7 @@
 ## 1. Plugin Scaffold and Tooling
 
 - [x] 1.1 Create the Obsidian community-plugin scaffold (`manifest.json`, `versions.json`, `src/main.ts`) with plugin ID `book-highlights-importer`, minimum Obsidian version `1.11.4`, and desktop/mobile support.
-- [x] 1.2 Configure TypeScript, esbuild, Vitest, linting, and package scripts, and install `yandex-book-api-ts` from the checked-in `yandex-book-api-ts-0.0.0.tgz` without patching or copying its implementation.
+- [x] 1.2 Configure TypeScript, esbuild, Vitest, linting, and package scripts, and install `yandex-book-api-ts` from the checked-in `yandex-book-api-ts-0.0.2.tgz` without patching or copying its implementation.
 - [x] 1.3 Add CI-safe commands for type checking, unit tests, production bundling, and verifying that release output contains the required Obsidian plugin files.
 
 ## 2. Provider-Neutral Core
@@ -24,8 +24,8 @@
 
 ## 4. Runtime Compatibility Gates
 
-- [x] 4.1 Build a minimal compatibility harness and verify the unmodified Yandex package can call `getProfile()`, `getMyLibrary()`, and `getUserQuotes()` in supported Obsidian desktop and mobile runtimes; record sanitized evidence and stop for an upstream replacement package if either runtime fails.
-  - Blocking result: Obsidian desktop `1.12.7` failed at `getProfile()` with a pre-response transport `ApiError`; library and quote calls were not reached, so implementation stops for an upstream replacement package.
+- [ ] 4.1 Build a minimal compatibility harness and verify the unmodified Yandex package can call `getProfile()`, `getMyLibrary()`, and `getUserQuotes()` in supported Obsidian desktop and mobile runtimes; record sanitized evidence and stop for an upstream replacement package if either runtime fails.
+  - Superseded result: version `0.0.0` failed at `getProfile()` in Obsidian desktop `1.12.7` with a pre-response transport `ApiError`. Version `0.0.2` adds public transport injection; re-run the gate through the Obsidian `requestUrl()` adapter on desktop and mobile.
 - [x] 4.2 Verify with sanitized live samples that `profile.login` is accepted by `getUserQuotes()`, `quote.book.uuid` identifies the selected book, pagination terminates reliably, and any stable quote source key has consistent semantics; do not fall back to the numeric `profile.id`, which returned `404 NotFound` during the compatibility spike.
 - [x] 4.3 Record and fixture the observed `LibraryCard.state` values and `readingProgress` scale, defining only proven mappings and retaining unknown values as `unknown`.
 - [ ] 4.4 Verify SecretStorage save/read/replace and empty-value Clear behavior on desktop and mobile, documenting a blocking incompatibility rather than falling back to ordinary plugin data.

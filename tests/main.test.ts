@@ -31,6 +31,7 @@ vi.mock("obsidian", () => ({
   Setting: class Setting {
     constructor(readonly container: HTMLElement) {}
   },
+  requestUrl: vi.fn(),
 }));
 
 import BookHighlightsImporterPlugin from "../src/main";

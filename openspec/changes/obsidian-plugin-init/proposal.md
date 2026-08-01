@@ -34,6 +34,6 @@ None.
 
 - Adds the TypeScript Obsidian plugin scaffold, command and modal UI, provider registry, normalized book and annotation contracts, Markdown rendering, settings, and vault update behavior.
 - Integrates Obsidian commands, modals, SecretStorage, plugin data, vault file operations, and workspace navigation with a minimum supported Obsidian version of 1.11.4.
-- Adds the supplied `yandex-book-api-ts-0.0.0.tgz` as a separately maintained dependency; desktop or mobile incompatibilities must be reported for an upstream library update rather than patched inside the plugin.
+- Adds the supplied `yandex-book-api-ts-0.0.2.tgz` as a separately maintained dependency; desktop or mobile incompatibilities must be reported for an upstream library update rather than patched inside the plugin.
 - Contacts Yandex Books only during explicit configuration tests and user-initiated imports; OAuth tokens and live account responses must not be committed or logged.
 - Introduces stable generated-note markers and namespaced frontmatter fields that future provider adapters must honor.

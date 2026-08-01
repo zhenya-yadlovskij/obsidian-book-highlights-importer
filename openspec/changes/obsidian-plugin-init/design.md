@@ -4,7 +4,7 @@ The repository currently contains product intent and OpenSpec artifacts but no O
 
 The plugin must run in Obsidian desktop and mobile, use Obsidian 1.11.4 or newer for SecretStorage, and keep raw OAuth tokens out of ordinary plugin data. One command opens a four-step wizard, imports one selected book, and creates or safely refreshes one **Managed Book Note**.
 
-The supplied `yandex-book-api-ts-0.0.0.tgz` is an ESM package that declares Node.js 20 or newer. Its distributed client uses global `fetch`, accepts an OAuth token, exposes `getProfile()`, offset-based `getMyLibrary()`, page-based `getUserQuotes()`, and typed API errors. The package does not expose transport injection through `YandexBookClient`, does not obtain or refresh credentials, and does not expose chapter metadata or a per-book quote endpoint.
+The supplied `yandex-book-api-ts-0.0.2.tgz` is an ESM package that declares Node.js 18 or newer. Its distributed client defaults to bundled `cross-fetch`, accepts an OAuth token, exposes `getProfile()`, offset-based `getMyLibrary()`, page-based `getUserQuotes()`, and typed API errors. Its second `YandexBookClient` constructor parameter accepts a fetch-compatible transport used for REST and GraphQL requests. The package does not obtain or refresh credentials and does not expose chapter metadata or a per-book quote endpoint.
 
 No files exist under the repository-level `adr/` directory, so there are no in-force ADRs constraining this design. The approved diagram style is a Mermaid hybrid: lightweight C4-inspired boundaries plus a dynamic sequence for the import flow.
 
@@ -318,7 +318,7 @@ The authoritative quote association is `quote.book.uuid === selectedBook.bookId`
 
 Quote mapping uses `content` as highlighted text, `comment` as the attached user comment, `progress` as the primary reading-order position, and CFI/XPath fields as optional display or tie-breaking location only after their ordering semantics are verified. Records with neither non-blank content nor non-blank comment are excluded. If filtering leaves zero annotations, the import stops before destination selection for early fetch or before note rendering for deferred fetch.
 
-The package currently uses global `fetch` internally and does not expose the existing transport injection capability through its public client constructor. Compatibility must therefore be tested in Obsidian desktop and mobile before dependent UI work. If either runtime fails because of CORS, headers, Node assumptions, or fetch behavior, implementation stops and reports the exact incompatibility so a replacement package can expose the required fix. The plugin will not copy endpoints or monkey-patch the bundle.
+The replacement package accepts a fetch-compatible second constructor parameter. The Obsidian adapter translates those requests to `requestUrl()` with `throw: false`, preserving URL, method, headers, supported request bodies, response status, response headers, and binary response body. This bypasses browser CORS while leaving endpoint and protocol ownership with the package. Compatibility must be re-tested in Obsidian desktop and mobile before dependent UI work. If either runtime fails, implementation stops and reports the exact incompatibility for another upstream package update. The plugin will not copy endpoints or monkey-patch the bundle.
 
 Alternative considered: call the Yandex API directly from the plugin. This would duplicate the maintained library and violate the agreed ownership boundary.
 
@@ -403,7 +403,7 @@ Manual release checks run in actual supported Obsidian desktop and mobile versio
 
 ## Risks / Trade-offs
 
-- [The Yandex package declares Node.js 20 and uses global `fetch`, while Obsidian mobile is a browser-like runtime] -> Run a desktop/mobile compatibility spike first; stop and request an upstream package update for any incompatibility.
+- [The Yandex package requires a host-specific transport in Obsidian] -> Inject the Obsidian `requestUrl()` adapter through the package's public constructor and re-run the desktop/mobile compatibility spike; stop and request an upstream package update for any remaining incompatibility.
 - [The unofficial Yandex API or response shapes may change] -> Keep endpoints behind one adapter, reject malformed required identity fields, maintain sanitized fixtures, and run opt-in smoke tests.
 - [`getUserQuotes()` returns account-wide pages rather than selected-book pages] -> Fetch only after book selection, paginate sequentially with loop guards, hard-fail incomplete pagination, filter immediately, show progress, and cache only for the wizard session.
 - [Yandex quote models do not provide chapter hierarchy] -> Use progress-based book order and one Highlights section; never invent chapter names.
@@ -433,9 +433,10 @@ For the verified account, `getProfile().login` is accepted by `getUserQuotes(use
 
 A sanitized live sample returned quote page counts `[20, 20, 0]`, repeated the first page consistently, and supplied `quote.book.uuid` for all 40 importable records. All 40 records supplied `itemUuid`, but only three values were unique, so `itemUuid` is not a quote source key; pagination uses normalized fingerprints and cross-page overlap rejection instead. The library sample contained `reading`, `finished`, and `pending` states. Only `reading` to `in-progress` and `finished` to `finished` are proven mappings; `pending` remains `unknown`. No numeric `readingProgress` values were observed, so no progress scale is defined. Sanitized fixture data is stored in `tests/fixtures/yandex/runtime-observations.json`.
 
-The unmodified package failed its Obsidian desktop gate on Obsidian `1.12.7` with installer `1.8.10`; the operating system was not recorded. `getProfile()` produced an `ApiError` transport failure with no HTTP status, while the same credential and package call succeeded under Node. `getMyLibrary()` and `getUserQuotes()` were not reached in Obsidian. This proves a pre-response incompatibility between the package's global-fetch transport and the tested Obsidian desktop runtime and triggers the upstream replacement-package stop condition. Mobile compatibility remains untested because either-runtime failure is already blocking.
+Version `0.0.0` failed its Obsidian desktop gate on Obsidian `1.12.7` with installer `1.8.10`; the operating system was not recorded. `getProfile()` produced an `ApiError` transport failure with no HTTP status, while the same credential and package call succeeded under Node. `getMyLibrary()` and `getUserQuotes()` were not reached in Obsidian. Version `0.0.2` supplies public transport injection and is integrated with the Obsidian `requestUrl()` adapter; desktop and mobile re-verification is pending.
 
 ## Open Questions
 
 - Does writing an empty value through SecretStorage provide the expected Clear behavior on both platforms? If not, the minimum Obsidian version or settings interaction must be revisited before implementation continues.
+- Does `yandex-book-api-ts` `0.0.2` with the injected Obsidian `requestUrl()` transport complete `getProfile()`, `getMyLibrary()`, and `getUserQuotes()` on desktop and mobile? A failure requires another upstream package update.
 - ADR review should determine whether the hexagonal provider boundary, SecretStorage requirement, and upstream-package ownership warrant separate durable repository-level ADRs. There are no existing ADRs to supersede.
