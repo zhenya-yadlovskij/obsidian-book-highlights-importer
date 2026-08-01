@@ -26,6 +26,7 @@
 
 - [ ] 4.1 Build a minimal compatibility harness and verify the unmodified Yandex package can call `getProfile()`, `getMyLibrary()`, and `getUserQuotes()` in supported Obsidian desktop and mobile runtimes; record sanitized evidence and stop for an upstream replacement package if either runtime fails.
   - Superseded result: version `0.0.0` failed at `getProfile()` in Obsidian desktop `1.12.7` with a pre-response transport `ApiError`. Version `0.0.2` adds public transport injection; re-run the gate through the Obsidian `requestUrl()` adapter on desktop and mobile.
+  - Desktop result: version `0.0.2` through `requestUrl()` succeeded on Obsidian `1.12.7` for profile, a 20-book library, and 40 account quotes. Mobile remains required.
 - [x] 4.2 Verify with sanitized live samples that `profile.login` is accepted by `getUserQuotes()`, `quote.book.uuid` identifies the selected book, pagination terminates reliably, and any stable quote source key has consistent semantics; do not fall back to the numeric `profile.id`, which returned `404 NotFound` during the compatibility spike.
 - [x] 4.3 Record and fixture the observed `LibraryCard.state` values and `readingProgress` scale, defining only proven mappings and retaining unknown values as `unknown`.
 - [ ] 4.4 Verify SecretStorage save/read/replace and empty-value Clear behavior on desktop and mobile, documenting a blocking incompatibility rather than falling back to ordinary plugin data.

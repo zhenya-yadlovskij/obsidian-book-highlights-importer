@@ -16,6 +16,28 @@
       "quotes": "not-run"
     }
   },
+  "replacementObsidianDesktop": {
+    "packageVersion": "0.0.2",
+    "obsidianVersion": "1.12.7",
+    "installerVersion": "1.8.10",
+    "operatingSystem": null,
+    "result": "success",
+    "library": {
+      "count": 20,
+      "states": [
+        { "state": "finished", "count": 5 },
+        { "state": "pending", "count": 7 },
+        { "state": "reading", "count": 8 }
+      ]
+    },
+    "quotes": {
+      "count": 40,
+      "importableCount": 40,
+      "missingBookIdentityCount": 0,
+      "itemUuidPresentCount": 40,
+      "itemUuidUniqueCount": 3
+    }
+  },
   "library": {
     "pageSize": 100,
     "count": 20,
