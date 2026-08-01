@@ -1,3 +1,10 @@
+import {
+  ApiError,
+  BadRequestError,
+  NotFoundError,
+  UnauthorizedError,
+} from "yandex-book-api-ts";
+
 export const YANDEX_TOKEN_SECRET_ID = "book-highlights-importer-yandex-books-token";
 
 export interface RuntimeSecretStorage {
@@ -60,6 +67,7 @@ export type YandexRuntimeResult =
     readonly stage: "credential" | "client" | "profile" | "library" | "quotes";
     readonly errorType: string;
     readonly status?: number;
+    readonly reason?: "fetch-failed" | "forbidden-header" | "transport";
   };
 
 export interface YandexRuntimeHarness {
@@ -73,15 +81,55 @@ const failure = (
   stage: "client" | "profile" | "library" | "quotes",
   error: unknown,
 ): YandexRuntimeResult => {
-  const errorType = error instanceof Error ? error.constructor.name : "UnknownError";
+  const errorType = error instanceof UnauthorizedError
+    ? "UnauthorizedError"
+    : error instanceof NotFoundError
+      ? "NotFoundError"
+      : error instanceof BadRequestError
+        ? "BadRequestError"
+        : error instanceof ApiError
+          ? "ApiError"
+          : error instanceof TypeError
+            ? "TypeError"
+            : error instanceof Error
+              ? "Error"
+              : "UnknownError";
   const status = typeof error === "object" && error !== null && "status" in error && typeof error.status === "number"
     ? error.status
     : undefined;
+  let reason: "fetch-failed" | "forbidden-header" | "transport" | undefined;
+  if (error instanceof ApiError && status === undefined) {
+    const details = error.details;
+    const serializedDetails = typeof details === "string"
+      ? details
+      : details === undefined
+        ? ""
+        : JSON.stringify(details);
+    const normalizedDetails = serializedDetails.toLowerCase();
+    if (
+      normalizedDetails.includes("unsafe header") ||
+      normalizedDetails.includes("forbidden header") ||
+      normalizedDetails.includes("refused to set") && normalizedDetails.includes("header")
+    ) {
+      reason = "forbidden-header";
+    } else if (
+      normalizedDetails.includes("failed to fetch") ||
+      normalizedDetails.includes("fetch failed") ||
+      normalizedDetails.includes("networkerror") ||
+      normalizedDetails.includes("network request failed") ||
+      normalizedDetails.includes("load failed")
+    ) {
+      reason = "fetch-failed";
+    } else {
+      reason = "transport";
+    }
+  }
   return {
     ok: false,
     stage,
     errorType,
     ...(status === undefined ? {} : { status }),
+    ...(reason === undefined ? {} : { reason }),
   };
 };
 

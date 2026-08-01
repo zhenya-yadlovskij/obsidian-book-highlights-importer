@@ -1,3 +1,4 @@
+import { ApiError } from "yandex-book-api-ts";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -125,5 +126,29 @@ describe("Yandex runtime compatibility harness", () => {
     expect(result).toEqual({ ok: false, stage: "client", errorType: "Error", status: 500 });
     expect(JSON.stringify(result)).not.toContain("unsafe constructor details");
     expect(JSON.stringify(result)).not.toContain("secret");
+  });
+
+  it("classifies minified package transport errors without exposing details", async () => {
+    const MinifiedApiError = class w extends ApiError {};
+    const client = createClient();
+    vi.mocked(client.getProfile).mockRejectedValue(new MinifiedApiError(
+      "unsafe provider message",
+      { details: "Refused to set unsafe header User-Agent" },
+    ));
+    const harness = createYandexRuntimeHarness(
+      { getSecret: () => "secret", setSecret: vi.fn() },
+      () => client,
+    );
+
+    const result = await harness.run();
+
+    expect(result).toEqual({
+      ok: false,
+      stage: "profile",
+      errorType: "ApiError",
+      reason: "forbidden-header",
+    });
+    expect(JSON.stringify(result)).not.toContain("User-Agent");
+    expect(JSON.stringify(result)).not.toContain("unsafe provider message");
   });
 });
