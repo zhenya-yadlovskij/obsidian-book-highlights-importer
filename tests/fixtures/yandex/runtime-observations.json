@@ -1,0 +1,39 @@
+{
+  "library": {
+    "pageSize": 100,
+    "count": 20,
+    "states": [
+      {
+        "source": "finished",
+        "count": 5,
+        "normalized": "finished"
+      },
+      {
+        "source": "pending",
+        "count": 7,
+        "normalized": "unknown"
+      },
+      {
+        "source": "reading",
+        "count": 8,
+        "normalized": "in-progress"
+      }
+    ],
+    "readingProgress": {
+      "numericValuesObserved": false,
+      "scale": null
+    }
+  },
+  "quotes": {
+    "pageSize": 20,
+    "pageCounts": [20, 20, 0],
+    "repeatedFirstPageStable": true,
+    "importableCount": 40,
+    "importableMissingBookIdentity": 0,
+    "itemUuid": {
+      "presentCount": 40,
+      "uniqueCount": 3,
+      "usableAsQuoteSourceKey": false
+    }
+  }
+}

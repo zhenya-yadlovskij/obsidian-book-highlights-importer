@@ -431,9 +431,10 @@ The first settings payload uses schema version `1`. Disabling or uninstalling th
 
 For the verified account, `getProfile().login` is accepted by `getUserQuotes(userId)`. The numeric `profile.id` returns `404 NotFound`, and no usable `profile.uuid` is returned, so the adapter uses only the non-blank login for account-wide quote retrieval.
 
+A sanitized live sample returned quote page counts `[20, 20, 0]`, repeated the first page consistently, and supplied `quote.book.uuid` for all 40 importable records. All 40 records supplied `itemUuid`, but only three values were unique, so `itemUuid` is not a quote source key; pagination uses normalized fingerprints and cross-page overlap rejection instead. The library sample contained `reading`, `finished`, and `pending` states. Only `reading` to `in-progress` and `finished` to `finished` are proven mappings; `pending` remains `unknown`. No numeric `readingProgress` values were observed, so no progress scale is defined. Sanitized fixture data is stored in `tests/fixtures/yandex/runtime-observations.json`.
+
 ## Open Questions
 
-- What exact `LibraryCard.state` values and `readingProgress` scale are returned for in-progress, finished, and unread books? The compatibility spike must capture sanitized examples before finalizing the mapping.
 - Do Yandex REST requests made by the package's global `fetch` succeed in both Obsidian desktop and mobile? A failure requires an upstream release that exposes fetch injection or another compatible transport.
 - Does writing an empty value through SecretStorage provide the expected Clear behavior on both platforms? If not, the minimum Obsidian version or settings interaction must be revisited before implementation continues.
 - ADR review should determine whether the hexagonal provider boundary, SecretStorage requirement, and upstream-package ownership warrant separate durable repository-level ADRs. There are no existing ADRs to supersede.

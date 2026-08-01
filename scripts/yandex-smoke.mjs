@@ -1,6 +1,7 @@
 import { YandexBookClient } from "yandex-book-api-ts";
 
 const token = process.env.YANDEX_BOOKS_OAUTH_TOKEN?.trim();
+let failed = false;
 
 if (!token) {
   console.error("YANDEX_BOOKS_OAUTH_TOKEN is required.");
@@ -12,10 +13,11 @@ const report = async (name, operation) => {
     const value = await operation();
     const result = { name, ok: true };
     if (Array.isArray(value)) result.count = value.length;
-    if (name === "getProfile") result.hasIdentity = Boolean(value?.uuid?.trim());
+    if (name === "getProfile") result.hasIdentity = Boolean(value?.login?.trim());
     console.log(JSON.stringify(result));
     return value;
   } catch (error) {
+    failed = true;
     console.log(JSON.stringify({
       name,
       ok: false,
@@ -29,9 +31,11 @@ const report = async (name, operation) => {
 const client = new YandexBookClient(token);
 const profile = await report("getProfile", () => client.getProfile());
 
-if (!profile?.uuid?.trim()) {
-  process.exitCode = 1;
+if (!profile?.login?.trim()) {
+  failed = true;
 } else {
   await report("getMyLibrary", () => client.getMyLibrary(100, 0));
-  await report("getUserQuotes", () => client.getUserQuotes(profile.uuid, 1, 100));
+  await report("getUserQuotes", () => client.getUserQuotes(profile.login, 1, 100));
 }
+
+if (failed) process.exitCode = 1;

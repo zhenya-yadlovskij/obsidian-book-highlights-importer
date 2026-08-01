@@ -25,8 +25,8 @@
 ## 4. Runtime Compatibility Gates
 
 - [ ] 4.1 Build a minimal compatibility harness and verify the unmodified Yandex package can call `getProfile()`, `getMyLibrary()`, and `getUserQuotes()` in supported Obsidian desktop and mobile runtimes; record sanitized evidence and stop for an upstream replacement package if either runtime fails.
-- [ ] 4.2 Verify with sanitized live samples that `profile.login` is accepted by `getUserQuotes()`, `quote.book.uuid` identifies the selected book, pagination terminates reliably, and any stable quote source key has consistent semantics; do not fall back to the numeric `profile.id`, which returned `404 NotFound` during the compatibility spike.
-- [ ] 4.3 Record and fixture the observed `LibraryCard.state` values and `readingProgress` scale, defining only proven mappings and retaining unknown values as `unknown`.
+- [x] 4.2 Verify with sanitized live samples that `profile.login` is accepted by `getUserQuotes()`, `quote.book.uuid` identifies the selected book, pagination terminates reliably, and any stable quote source key has consistent semantics; do not fall back to the numeric `profile.id`, which returned `404 NotFound` during the compatibility spike.
+- [x] 4.3 Record and fixture the observed `LibraryCard.state` values and `readingProgress` scale, defining only proven mappings and retaining unknown values as `unknown`.
 - [ ] 4.4 Verify SecretStorage save/read/replace and empty-value Clear behavior on desktop and mobile, documenting a blocking incompatibility rather than falling back to ordinary plugin data.
 
 ## 5. Yandex Provider Adapter
@@ -35,7 +35,7 @@
 - [ ] 5.2 Implement complete library pagination and normalization with tests for offset advancement, short final pages, repeated full pages, no-progress pages, safety-limit exhaustion, missing text-book IDs, and proven status/progress mappings.
 - [ ] 5.3 Implement complete quote pagination with tests for page signatures, stable-key deduplication, conflicting duplicates, ambiguous cross-page overlap, malformed pagination, safety limits, and hard failure instead of partial results.
 - [ ] 5.4 Map only records belonging to the selected book, fail when an otherwise importable quote lacks owning-book identity, sanitize provider text, retain highlight/comment pairs, and exclude records where both values are blank.
-- [ ] 5.5 Add an opt-in Yandex smoke test using `YANDEX_BOOKS_OAUTH_TOKEN` that persists no live response and emits neither the token nor unsafe provider details.
+- [x] 5.5 Add an opt-in Yandex smoke test using `YANDEX_BOOKS_OAUTH_TOKEN` that persists no live response and emits neither the token nor unsafe provider details.
 
 ## 6. Obsidian Adapters and Settings
 
