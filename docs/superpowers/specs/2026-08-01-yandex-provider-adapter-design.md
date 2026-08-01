@@ -41,16 +41,16 @@ No unverified reading-progress scale is inferred.
 `fetchAnnotations` obtains a non-blank profile login, then requests account
 quote pages with a fixed page size until a short page. It validates page
 signatures and rejects all incomplete or ambiguous pagination outcomes rather
-than returning a partial snapshot. Stable source keys deduplicate identical
-records and reject conflicting values. Without a stable source key,
-same-page identical records remain distinct, while an identical normalized
-fingerprint crossing a page boundary is an ambiguous overlap and fails.
+than returning a partial snapshot. The observed `itemUuid` is not a stable
+source key and the package exposes no alternative, so same-page identical
+records remain distinct. An identical normalized fingerprint crossing a page
+boundary is an ambiguous overlap and fails.
 
 The adapter keeps only records for the selected book identity. An otherwise
 importable record lacking `quote.book.uuid` fails the snapshot. It normalizes
 line endings, strips unsupported markup, trims text, keeps highlight/comment
-pairs together, and omits records with both values blank. It assigns stable
-input indexes in source order.
+pairs together, and omits records with both values blank. It omits
+`sourceKey` and assigns stable input indexes in source order.
 
 ## Tests And Completion
 
