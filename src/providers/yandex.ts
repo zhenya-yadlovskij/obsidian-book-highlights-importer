@@ -1,4 +1,5 @@
 import { ApiError, UnauthorizedError } from "yandex-book-api-ts";
+import { createProviderBook, type ProviderBook } from "../core/models";
 import {
   failure,
   ok,
@@ -25,6 +26,34 @@ const credentialError = (error: unknown): ProviderResult<never> => {
   return providerError("provider-unavailable");
 };
 
+const PAGE_SIZE = 100;
+const MAX_PAGES = 100;
+
+const libraryStatus = (state: unknown): "in-progress" | "finished" | "unknown" => {
+  const normalized = typeof state === "string" ? state.trim().toLowerCase() : "";
+  if (normalized === "reading") return "in-progress";
+  if (normalized === "finished") return "finished";
+  return "unknown";
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const normalizedText = (value: unknown): string =>
+  typeof value === "string" ? value.trim() : "";
+
+const libraryPageSignature = (page: readonly unknown[]): string => JSON.stringify(page.map((card) => {
+  if (!isRecord(card)) return ["", "", ""];
+
+  const book = isRecord(card.book) ? card.book : undefined;
+  const progress = card.readingProgress;
+  return [
+    normalizedText(book?.uuid),
+    normalizedText(card.state).toLowerCase(),
+    typeof progress === "number" && Number.isFinite(progress) ? String(progress) : "",
+  ];
+}));
+
 export const createYandexBooksProvider = (
   createClient: (credential: string) => YandexClient,
 ): ReadingProviderPort => ({
@@ -39,6 +68,49 @@ export const createYandexBooksProvider = (
       return credentialError(error);
     }
   },
-  listBooks: () => Promise.resolve(providerError("provider-unavailable")),
+  listBooks: async (credential): Promise<ProviderResult<readonly ProviderBook[]>> => {
+    try {
+      const client = createClient(credential);
+      const books: ProviderBook[] = [];
+      const pageSignatures = new Set<string>();
+      const bookIds = new Set<string>();
+
+      for (let pageIndex = 0; pageIndex < MAX_PAGES; pageIndex += 1) {
+        const page: unknown = await client.getMyLibrary(PAGE_SIZE, pageIndex * PAGE_SIZE);
+        if (!Array.isArray(page)) return providerError("incomplete-data");
+
+        if (page.length === PAGE_SIZE) {
+          const signature = libraryPageSignature(page);
+          if (pageSignatures.has(signature)) return providerError("incomplete-data");
+          pageSignatures.add(signature);
+        }
+
+        let addedBook = false;
+        for (const card of page) {
+          if (!isRecord(card) || !isRecord(card.book)) continue;
+
+          const bookId = normalizedText(card.book.uuid);
+          if (!bookId || bookIds.has(bookId)) continue;
+
+          bookIds.add(bookId);
+          addedBook = true;
+          books.push(createProviderBook({
+            providerId: "yandex-books",
+            bookId,
+            title: "",
+            authors: [],
+            status: libraryStatus(card.state),
+          }));
+        }
+
+        if (page.length === PAGE_SIZE && !addedBook) return providerError("incomplete-data");
+        if (page.length < PAGE_SIZE) return ok(Object.freeze(books));
+      }
+
+      return providerError("incomplete-data");
+    } catch (error) {
+      return credentialError(error);
+    }
+  },
   fetchAnnotations: () => Promise.resolve(providerError("provider-unavailable")),
 });
