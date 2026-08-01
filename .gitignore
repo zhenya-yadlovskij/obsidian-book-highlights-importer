@@ -33,6 +33,7 @@ pnpm-debug.log*
 
 # Local brainstorming companion
 .superpowers/
+.worktrees/
 
 # OpenSpec local output
 openspec/.cache/
