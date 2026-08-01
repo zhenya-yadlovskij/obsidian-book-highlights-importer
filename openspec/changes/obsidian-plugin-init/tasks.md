@@ -1,26 +1,26 @@
 ## 1. Plugin Scaffold and Tooling
 
-- [ ] 1.1 Create the Obsidian community-plugin scaffold (`manifest.json`, `versions.json`, `src/main.ts`) with plugin ID `book-highlights-importer`, minimum Obsidian version `1.11.4`, and desktop/mobile support.
-- [ ] 1.2 Configure TypeScript, esbuild, Vitest, linting, and package scripts, and install `yandex-book-api-ts` from the checked-in `yandex-book-api-ts-0.0.0.tgz` without patching or copying its implementation.
-- [ ] 1.3 Add CI-safe commands for type checking, unit tests, production bundling, and verifying that release output contains the required Obsidian plugin files.
+- [x] 1.1 Create the Obsidian community-plugin scaffold (`manifest.json`, `versions.json`, `src/main.ts`) with plugin ID `book-highlights-importer`, minimum Obsidian version `1.11.4`, and desktop/mobile support.
+- [x] 1.2 Configure TypeScript, esbuild, Vitest, linting, and package scripts, and install `yandex-book-api-ts` from the checked-in `yandex-book-api-ts-0.0.0.tgz` without patching or copying its implementation.
+- [x] 1.3 Add CI-safe commands for type checking, unit tests, production bundling, and verifying that release output contains the required Obsidian plugin files.
 
 ## 2. Provider-Neutral Core
 
-- [ ] 2.1 Define immutable `ProviderBook`, **Book Annotation**, and **Import Snapshot** models with provider/book identity, normalized status, ordering fields, and stable input indexes, covered by unit tests that require neither Obsidian nor network access.
-- [ ] 2.2 Define narrow reading-provider, credential-store, settings-repository, and note-repository ports plus credential, authentication, availability, incomplete-data, destination-conflict, and post-commit warning result types.
-- [ ] 2.3 Implement an immutable compile-time **Provider Registry** and tests proving settings and imports discover each registered **Provider Adapter** without runtime loading.
-- [ ] 2.4 Implement and test library grouping and title/author search so every returned book appears once in In progress, Finished, then Unread or unknown order.
-- [ ] 2.5 Implement and test provider-neutral annotation filtering and deterministic ordering by section order, numeric location/progress, creation time, and stable input index.
-- [ ] 2.6 Implement the import use case with tests for a missing **Provider Credential**, credential re-reading before every provider operation, early/deferred fetch capability, empty snapshots, and no note operation before confirmation.
-- [ ] 2.7 Implement destination defaults, last-successful-folder precedence, vault-safe path normalization, editable `Author - Title.md` filename sanitization, and persistence only after a committed note write.
+- [x] 2.1 Define immutable `ProviderBook`, **Book Annotation**, and **Import Snapshot** models with provider/book identity, normalized status, ordering fields, and stable input indexes, covered by unit tests that require neither Obsidian nor network access.
+- [x] 2.2 Define narrow reading-provider, credential-store, settings-repository, and note-repository ports plus credential, authentication, availability, incomplete-data, destination-conflict, and post-commit warning result types.
+- [x] 2.3 Implement an immutable compile-time **Provider Registry** and tests proving settings and imports discover each registered **Provider Adapter** without runtime loading.
+- [x] 2.4 Implement and test library grouping and title/author search so every returned book appears once in In progress, Finished, then Unread or unknown order.
+- [x] 2.5 Implement and test provider-neutral annotation filtering and deterministic ordering by section order, numeric location/progress, creation time, and stable input index.
+- [x] 2.6 Implement the import use case with tests for a missing **Provider Credential**, credential re-reading before every provider operation, early/deferred fetch capability, empty snapshots, and no note operation before confirmation.
+- [x] 2.7 Implement destination defaults, last-successful-folder precedence, vault-safe path normalization, editable `Author - Title.md` filename sanitization, and persistence only after a committed note write.
 
 ## 3. Managed Note Policy
 
-- [ ] 3.1 Implement the fixed Markdown renderer with golden tests for chapter paths, heading-depth capping, Highlights fallback, blockquoted highlights, attached/comment-only callouts, locations, and untrusted Markdown text.
-- [ ] 3.2 Implement canonical marker identity encoding and strict parsing for exactly one version-1 **Managed Section**, rejecting malformed, duplicated, nested, unsupported, or identity-mismatched markers.
-- [ ] 3.3 Implement namespaced `book-highlights-` frontmatter serialization and merge tests that refresh the complete owned field set while preserving every user-owned key and body region.
-- [ ] 3.4 Implement the **Managed Book Note** service with tests for one-call create/update, latest-content processing, complete-snapshot replacement, destination conflicts, rendering failures, and zero writes on every pre-commit failure.
-- [ ] 3.5 Add property-oriented tests for arbitrary user text, YAML values, marker-like imported content, invalid percent encoding, and repeated re-imports without duplicate managed content.
+- [x] 3.1 Implement the fixed Markdown renderer with golden tests for chapter paths, heading-depth capping, Highlights fallback, blockquoted highlights, attached/comment-only callouts, locations, and untrusted Markdown text.
+- [x] 3.2 Implement canonical marker identity encoding and strict parsing for exactly one version-1 **Managed Section**, rejecting malformed, duplicated, nested, unsupported, or identity-mismatched markers.
+- [x] 3.3 Implement namespaced `book-highlights-` frontmatter serialization and merge tests that refresh the complete owned field set while preserving every user-owned key and body region.
+- [x] 3.4 Implement the **Managed Book Note** service with tests for one-call create/update, latest-content processing, complete-snapshot replacement, destination conflicts, rendering failures, and zero writes on every pre-commit failure.
+- [x] 3.5 Add property-oriented tests for arbitrary user text, YAML values, marker-like imported content, invalid percent encoding, and repeated re-imports without duplicate managed content.
 
 ## 4. Runtime Compatibility Gates
 
