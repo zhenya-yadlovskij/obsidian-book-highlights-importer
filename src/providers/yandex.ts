@@ -31,7 +31,7 @@ export const createYandexBooksProvider = (
   id: "yandex-books",
   displayName: "Yandex Books",
   annotationFetch: "early",
-  testCredential: async (credential) => {
+  testCredential: async (credential): Promise<ProviderResult<void>> => {
     try {
       const profile = await createClient(credential).getProfile();
       return profile?.login?.trim() ? ok(undefined) : providerError("incomplete-data");
@@ -39,6 +39,6 @@ export const createYandexBooksProvider = (
       return credentialError(error);
     }
   },
-  listBooks: async () => providerError("provider-unavailable"),
-  fetchAnnotations: async () => providerError("provider-unavailable"),
+  listBooks: () => Promise.resolve(providerError("provider-unavailable")),
+  fetchAnnotations: () => Promise.resolve(providerError("provider-unavailable")),
 });

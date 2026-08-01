@@ -3,16 +3,16 @@ import { describe, expect, it } from "vitest";
 import { createYandexBooksProvider, type YandexClient } from "../../src/providers/yandex";
 
 const client = (overrides: Partial<YandexClient> = {}): YandexClient => ({
-  getProfile: async () => undefined,
-  getMyLibrary: async () => [],
-  getUserQuotes: async () => [],
+  getProfile: () => Promise.resolve(undefined),
+  getMyLibrary: () => Promise.resolve([]),
+  getUserQuotes: () => Promise.resolve([]),
   ...overrides,
 });
 
 describe("Yandex Books provider credential validation", () => {
   it("accepts a profile with a non-blank login", async () => {
     const provider = createYandexBooksProvider(() => client({
-      getProfile: async () => ({ login: "reader" }),
+      getProfile: () => Promise.resolve({ login: "reader" }),
     }));
 
     await expect(provider.testCredential("secret-token")).resolves.toEqual({ ok: true, value: undefined });
@@ -27,10 +27,7 @@ describe("Yandex Books provider credential validation", () => {
     [new Error("unknown provider detail"), "provider-unavailable"],
   ] as const)("maps credential failure safely", async (outcome, category) => {
     const provider = createYandexBooksProvider(() => client({
-      getProfile: async () => {
-        if (outcome instanceof Error) throw outcome;
-        return outcome;
-      },
+      getProfile: () => outcome instanceof Error ? Promise.reject(outcome) : Promise.resolve(outcome),
     }));
 
     const result = await provider.testCredential("secret-token");
