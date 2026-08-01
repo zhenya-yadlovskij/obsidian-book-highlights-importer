@@ -38,6 +38,40 @@
       "itemUuidUniqueCount": 3
     }
   },
+  "replacementObsidianMobile": {
+    "packageVersion": "0.0.2",
+    "obsidianVersion": null,
+    "evidence": "manual runtime compatibility harness output",
+    "result": "success",
+    "library": {
+      "count": 20,
+      "states": [
+        { "state": "finished", "count": 5 },
+        { "state": "pending", "count": 7 },
+        { "state": "reading", "count": 8 }
+      ]
+    },
+    "quotes": {
+      "count": 40,
+      "importableCount": 40,
+      "missingBookIdentityCount": 0,
+      "itemUuidPresentCount": 40,
+      "itemUuidUniqueCount": 3
+    }
+  },
+  "secretStorage": {
+    "evidence": "manual supported-runtime verification",
+    "desktop": {
+      "saveRead": "passed",
+      "replace": "passed",
+      "blankClear": "passed"
+    },
+    "mobile": {
+      "saveRead": "passed",
+      "replace": "passed",
+      "blankClear": "passed"
+    }
+  },
   "library": {
     "pageSize": 100,
     "count": 20,
