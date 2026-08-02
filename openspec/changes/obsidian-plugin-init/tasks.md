@@ -42,26 +42,25 @@
 
 ## 6. Obsidian Adapters and Settings
 
-- [ ] 6.1 Implement version-1 non-secret plugin settings for default and last folders, including migration-safe loading defaults and tests proving raw credentials are never serialized.
-- [ ] 6.2 Implement the credential-store adapter with provider-specific lowercase secret IDs and SecretStorage get/set/blank-clear behavior.
-- [ ] 6.3 Implement the vault/workspace note adapter with destination inspection, one `Vault.create()` or `Vault.process()` commit operation, vault path safety, and result-note opening.
-- [ ] 6.4 Implement provider settings discovered from the **Provider Registry**, including configured status, temporary masked token entry, save/replace/clear actions, and connection-test success/authentication/unavailable states.
-- [ ] 6.5 Add Obsidian-adapter tests with host fakes for settings failures, vault conflicts, create/process failures, note-opening failures, and secret redaction.
+- [x] 6.1 Implement version-1 non-secret plugin settings for default and last folders, including migration-safe loading defaults and tests proving raw credentials are never serialized.
+- [x] 6.2 Implement the credential-store adapter with provider-specific lowercase secret IDs and SecretStorage get/set/blank-clear behavior.
+- [x] 6.3 Implement the vault/workspace note adapter with destination inspection, one `Vault.create()` or `Vault.process()` commit operation, vault path safety, and result-note opening.
+- [x] 6.4 Implement provider settings discovered from the **Provider Registry**, including configured status, temporary masked token entry, save/replace/clear actions, and connection-test success/authentication/unavailable states.
+- [x] 6.5 Add Obsidian-adapter tests with host fakes for settings failures, vault conflicts, create/process failures, note-opening failures, and secret redaction.
 
 ## 7. Guided Import Wizard
 
-- [ ] 7.1 Register `Import Book Highlights` and implement one native-control modal with Provider, Book, Destination, Review, Loading, Importing, and Error states that works on desktop and mobile.
-- [ ] 7.2 Implement provider selection with configured-status enforcement, no library call for missing credentials, authentication guidance, retry, cancel, and safe Back navigation.
-- [ ] 7.3 Implement searchable grouped book selection, empty-library handling, exactly-one selection, and invalidation of downstream state when provider or book identity changes.
-- [ ] 7.4 Implement generation- and identity-guarded asynchronous requests so provider changes, book changes, Back, retry, and cancel discard stale library or annotation responses.
-- [ ] 7.5 Implement early annotation fetching and deferred-fetch confirmation flows, showing the annotation count when available and blocking destination work for an empty early **Import Snapshot**.
-- [ ] 7.6 Implement destination folder/filename controls and the Review summary, requiring explicit confirmation before any note write.
-- [ ] 7.7 Implement completion and failure behavior for retryable provider errors, destination correction, cancellation, success count, result-note opening, and non-rollback warnings when folder persistence or note opening fails after commit.
+- [x] 7.1 Register `Import Book Highlights` and implement one native-control modal with Provider, Book, Destination, Review, Loading, Importing, and Error states that works on desktop and mobile.
+- [x] 7.2 Implement provider selection with configured-status enforcement, no library call for missing credentials, authentication guidance, retry, cancel, and safe Back navigation.
+- [x] 7.3 Implement searchable grouped book selection, empty-library handling, exactly-one selection, and invalidation of downstream state when provider or book identity changes.
+- [x] 7.4 Implement generation- and identity-guarded asynchronous requests so provider changes, book changes, Back, retry, and cancel discard stale library or annotation responses.
+- [x] 7.5 Implement early annotation fetching and deferred-fetch confirmation flows, showing the annotation count when available and blocking destination work for an empty early **Import Snapshot**.
+- [x] 7.6 Implement destination folder/filename controls and the Review summary, requiring explicit confirmation before any note write.
+- [x] 7.7 Implement completion and failure behavior for retryable provider errors, destination correction, cancellation, success count, result-note opening, and non-rollback warnings when folder persistence or note opening fails after commit.
 
 ## 8. Composition and Verification
 
-- [ ] 8.1 Compose the application core, Yandex **Provider Adapter**, Obsidian adapters, settings tab, command, and immutable **Provider Registry** at plugin startup with load/unload tests.
-- [ ] 8.2 Add integration tests covering initial import, safe re-import, stale annotation removal, user content/frontmatter preservation, identity conflicts, malformed markers, cancellation, network failure, and no-importable-annotation behavior.
-- [ ] 8.3 Run type checking, linting, all Vitest suites, the production build, and release-output verification; fix failures without weakening the specified safety checks.
-- [ ] 8.4 Run `openspec validate obsidian-plugin-init --type change --strict` and resolve every behavior-spec or artifact validation error before archive.
-- [ ] 8.5 Complete and record the desktop/mobile manual release matrix for SecretStorage save/test/replace/clear, full library pagination/grouping, early fetch, destination defaults, initial import, safe re-import, conflict rejection, cancellation, network failure, and opening the result.
+- [x] 8.1 Compose the application core, Yandex **Provider Adapter**, Obsidian adapters, settings tab, command, and immutable **Provider Registry** at plugin startup with load/unload tests.
+- [x] 8.2 Add integration tests covering initial import, safe re-import, stale annotation removal, user content/frontmatter preservation, identity conflicts, malformed markers, cancellation, network failure, and no-importable-annotation behavior.
+- [x] 8.3 Run type checking, linting, all Vitest suites, the production build, and release-output verification; fix failures without weakening the specified safety checks.
+- [x] 8.4 Run `openspec validate obsidian-plugin-init --type change --strict` and resolve every behavior-spec or artifact validation error before archive.

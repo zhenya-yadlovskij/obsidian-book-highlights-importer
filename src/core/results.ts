@@ -23,6 +23,7 @@ export type ImportError =
   | { readonly category: "confirmation-required" }
   | { readonly category: "empty-snapshot" }
   | { readonly category: "invalid-snapshot" }
+  | { readonly category: "cancelled" }
   | { readonly category: "renderer-unavailable" }
   | { readonly category: "destination-conflict" }
   | { readonly category: "provider-not-registered"; readonly providerId: string }

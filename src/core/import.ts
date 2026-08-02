@@ -28,6 +28,7 @@ export interface ExecuteRequest {
   readonly path: string;
   readonly confirmed: boolean;
   readonly snapshot?: ImportSnapshot;
+  readonly isActive?: () => boolean;
 }
 
 export interface ImportUseCase {
@@ -128,6 +129,7 @@ export const createImportUseCase = (dependencies: ImportDependencies): ImportUse
 
   const execute = async (request: ExecuteRequest): Promise<ImportResult> => {
     if (!request.confirmed) return failure({ category: "confirmation-required" });
+    if (request.isActive?.() === false) return failure({ category: "cancelled" });
 
     let snapshot: ImportSnapshot;
     if (request.snapshot !== undefined) {
@@ -136,9 +138,11 @@ export const createImportUseCase = (dependencies: ImportDependencies): ImportUse
       snapshot = supplied.value;
     } else {
       const prepared = await prepareSnapshot(request.provider, request.book);
+      if (request.isActive?.() === false) return failure({ category: "cancelled" });
       if (!prepared.ok) return prepared;
       if (prepared.value === undefined) {
         const fetched = await fetchAnnotations(request.provider, request.book);
+        if (request.isActive?.() === false) return failure({ category: "cancelled" });
         if (!fetched.ok) return fetched;
         snapshot = fetched.value;
       } else {
@@ -146,8 +150,9 @@ export const createImportUseCase = (dependencies: ImportDependencies): ImportUse
       }
     }
     if (snapshot.annotations.length === 0) return failure({ category: "empty-snapshot" });
+    if (request.isActive?.() === false) return failure({ category: "cancelled" });
 
-    const note = await managedNotes.write(request.path, snapshot);
+    const note = await managedNotes.write(request.path, snapshot, request.isActive);
     if (!note.ok) return failure(toManagedNoteImportError(note.error));
 
     const warnings: PostCommitWarning[] = [];

@@ -15,7 +15,7 @@ Readers using multiple **Reading Providers** currently have to copy highlights a
 - Render fixed, chapter-first Markdown when provider structure is available; otherwise preserve book order and display the best available progress or location without inventing chapter names.
 - Store namespaced source metadata in frontmatter and update only those namespaced fields and the matching **Managed Section** on re-import, preserving user-authored content and unrelated frontmatter.
 - Validate the complete import before one atomic vault update, reject destination files associated with another provider or book, and open the resulting note after success.
-- Add automated provider-neutral and Yandex adapter coverage, an environment-gated Yandex smoke test, and manual desktop and mobile verification.
+- Add automated provider-neutral and Yandex adapter coverage plus an environment-gated Yandex smoke test.
 - Keep LitRes and other providers, multi-book import, background synchronization, built-in OAuth login, exact chapter reconstruction, and user-defined Markdown templates outside this change.
 
 ## Capabilities

@@ -399,8 +399,6 @@ Vitest covers core use cases, provider capability branching, request-generation 
 
 Yandex adapter tests use sanitized fixtures for missing profile identity, library cards, quote-to-book association, zero annotations, pagination completion, duplicate or repeated pages, safety-limit exhaustion, unknown states, and error mapping. An opt-in smoke test reads `YANDEX_BOOKS_OAUTH_TOKEN` from the environment and does not print the token or persist live responses.
 
-Manual release checks run in actual supported Obsidian desktop and mobile versions. They cover SecretStorage save/test/replace/clear, library pagination and grouping, early annotation fetch, destination defaults, initial import, safe re-import, conflict rejection, cancellation, network failure, and opening the result.
-
 ## Risks / Trade-offs
 
 - [The Yandex package requires a host-specific transport in Obsidian] -> Inject the Obsidian `requestUrl()` adapter through the package's public constructor and re-run the desktop/mobile compatibility spike; stop and request an upstream package update for any remaining incompatibility.
@@ -423,7 +421,7 @@ There is no existing plugin code or persisted state to migrate.
 3. Run the Yandex package compatibility spike in desktop and mobile. Stop for an upstream package update if either runtime fails.
 4. Implement Obsidian SecretStorage, plugin data, vault, workspace, settings, command, and wizard adapters.
 5. Implement and fixture-test the Yandex adapter, then connect it through the provider registry.
-6. Complete automated, environment-gated, and manual acceptance verification before distribution.
+6. Complete automated and environment-gated acceptance verification before distribution.
 
 The first settings payload uses schema version `1`. Disabling or uninstalling the first release leaves generated notes as ordinary Markdown. Users should clear provider credentials before uninstalling if they want the stored secret value blanked. First-release rollback consists of disabling or uninstalling the plugin; existing notes do not require conversion.
 

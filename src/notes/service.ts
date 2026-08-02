@@ -9,6 +9,7 @@ import { renderMarkdown } from "./markdown";
 export type ManagedNoteError =
   | { readonly category: "invalid-snapshot" }
   | { readonly category: "empty-snapshot" }
+  | { readonly category: "cancelled" }
   | { readonly category: "rendering-failed" }
   | { readonly category: "destination-conflict" };
 
@@ -18,7 +19,11 @@ export interface ManagedNoteSuccess {
 }
 
 export interface ManagedNoteService {
-  readonly write: (path: string, snapshot: ImportSnapshot) => Promise<Result<ManagedNoteSuccess, ManagedNoteError>>;
+  readonly write: (
+    path: string,
+    snapshot: ImportSnapshot,
+    isActive?: () => boolean,
+  ) => Promise<Result<ManagedNoteSuccess, ManagedNoteError>>;
 }
 
 export interface ManagedNoteDependencies {
@@ -41,7 +46,11 @@ const hasControlCharacter = (value: string): boolean => {
 };
 
 export const createManagedNoteService = (dependencies: ManagedNoteDependencies): ManagedNoteService => {
-  const write = async (path: string, supplied: ImportSnapshot): Promise<Result<ManagedNoteSuccess, ManagedNoteError>> => {
+  const write = async (
+    path: string,
+    supplied: ImportSnapshot,
+    isActive?: () => boolean,
+  ): Promise<Result<ManagedNoteSuccess, ManagedNoteError>> => {
     const snapshot = createImportSnapshot({
       book: supplied.book,
       annotations: filterImportableAnnotations(supplied.annotations),
@@ -66,6 +75,7 @@ export const createManagedNoteService = (dependencies: ManagedNoteDependencies):
       return failure({ category: "rendering-failed" });
     }
     if (body.trim() === "") return failure({ category: "rendering-failed" });
+    if (isActive?.() === false) return failure({ category: "cancelled" });
 
     const metadata: ManagedFrontmatter = {
       providerId: snapshot.book.providerId,
@@ -83,6 +93,7 @@ export const createManagedNoteService = (dependencies: ManagedNoteDependencies):
     } catch {
       return failure({ category: "destination-conflict" });
     }
+    if (isActive?.() === false) return failure({ category: "cancelled" });
     if (destination.kind === "conflict") return failure({ category: "destination-conflict" });
 
     if (destination.kind === "missing") {
