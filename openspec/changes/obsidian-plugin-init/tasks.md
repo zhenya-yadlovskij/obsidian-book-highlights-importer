@@ -34,10 +34,10 @@
 
 ## 5. Yandex Provider Adapter
 
-- [ ] 5.1 Implement Yandex credential testing through `getProfile()` with tests for unauthorized, unavailable, rejected, blank-identity, and unknown failures that never expose a **Provider Credential**.
-- [ ] 5.2 Implement complete library pagination and normalization with tests for offset advancement, short final pages, repeated full pages, no-progress pages, safety-limit exhaustion, missing text-book IDs, and proven status/progress mappings.
-- [ ] 5.3 Implement complete quote pagination with tests for page signatures, preservation of same-page duplicates, ambiguous cross-page overlap, malformed pagination, safety limits, and hard failure instead of partial results; do not treat the observed `itemUuid` as a stable source key.
-- [ ] 5.4 Map only records belonging to the selected book, fail when an otherwise importable quote lacks owning-book identity, sanitize provider text, retain highlight/comment pairs, and exclude records where both values are blank.
+- [x] 5.1 Implement Yandex credential testing through `getProfile()` with tests for unauthorized, unavailable, rejected, blank-identity, and unknown failures that never expose a **Provider Credential**.
+- [x] 5.2 Implement complete library pagination and normalization with tests for offset advancement, short final pages, repeated full pages, no-progress pages, safety-limit exhaustion, missing text-book IDs, and proven status/progress mappings.
+- [x] 5.3 Implement complete quote pagination with tests for page signatures, preservation of same-page duplicates, ambiguous cross-page overlap, malformed pagination, safety limits, and hard failure instead of partial results; do not treat the observed `itemUuid` as a stable source key.
+- [x] 5.4 Map only records belonging to the selected book, fail when an otherwise importable quote lacks owning-book identity, sanitize provider text, retain highlight/comment pairs, and exclude records where both values are blank.
 - [x] 5.5 Add an opt-in Yandex smoke test using `YANDEX_BOOKS_OAUTH_TOKEN` that persists no live response and emits neither the token nor unsafe provider details.
 
 ## 6. Obsidian Adapters and Settings

@@ -1,5 +1,10 @@
 import { ApiError, UnauthorizedError } from "yandex-book-api-ts";
-import { createProviderBook, type BookAnnotation, type ProviderBook } from "../core/models";
+import {
+  createBookAnnotation,
+  createProviderBook,
+  type BookAnnotation,
+  type ProviderBook,
+} from "../core/models";
 import {
   failure,
   ok,
@@ -44,6 +49,13 @@ const isUnknownArray = (value: unknown): value is readonly unknown[] => Array.is
 const normalizedText = (value: unknown): string =>
   typeof value === "string" ? value.trim() : "";
 
+const sanitizeText = (value: unknown): string | undefined => {
+  if (typeof value !== "string") return undefined;
+
+  const sanitized = value.replaceAll("\r\n", "\n").replaceAll("\r", "\n").replace(/<[^>]*>/g, "").trim();
+  return sanitized || undefined;
+};
+
 const libraryPageSignature = (page: readonly unknown[]): string => JSON.stringify(page.map((card) => {
   if (!isRecord(card)) return ["", "", ""];
 
@@ -77,8 +89,38 @@ const quoteFingerprint = (quote: unknown): string => {
   ]);
 };
 
-const mapCollectedQuotes = (quotes: readonly unknown[]): readonly BookAnnotation[] =>
-  Object.freeze(quotes.map((_quote, inputIndex) => Object.freeze({ inputIndex })));
+const mapCollectedQuotes = (
+  quotes: readonly unknown[],
+  selectedBook: ProviderBook,
+): readonly BookAnnotation[] | undefined => {
+  const annotations: BookAnnotation[] = [];
+
+  for (const [inputIndex, quote] of quotes.entries()) {
+    const record = isRecord(quote) ? quote : undefined;
+    const text = sanitizeText(record?.content);
+    const comment = sanitizeText(record?.comment);
+    if (text === undefined && comment === undefined) continue;
+
+    const quoteBook = isRecord(record?.book) ? record.book : undefined;
+    const bookId = normalizedText(quoteBook?.uuid);
+    if (!bookId) return undefined;
+    if (bookId !== selectedBook.bookId) continue;
+
+    annotations.push(createBookAnnotation({
+      ...(text === undefined ? {} : { text }),
+      ...(comment === undefined ? {} : { comment }),
+      ...(typeof record?.progress === "number" && Number.isFinite(record.progress)
+        ? { progress: record.progress }
+        : {}),
+      ...(typeof record?.createdAt === "number" && Number.isFinite(record.createdAt)
+        ? { createdAt: record.createdAt }
+        : {}),
+      inputIndex,
+    }));
+  }
+
+  return Object.freeze(annotations);
+};
 
 export const createYandexBooksProvider = (
   createClient: (credential: string) => YandexClient,
@@ -138,7 +180,7 @@ export const createYandexBooksProvider = (
       return credentialError(error);
     }
   },
-  fetchAnnotations: async (credential): Promise<ProviderResult<readonly BookAnnotation[]>> => {
+  fetchAnnotations: async (credential, book): Promise<ProviderResult<readonly BookAnnotation[]>> => {
     try {
       const client = createClient(credential);
       const profile = await client.getProfile();
@@ -168,7 +210,10 @@ export const createYandexBooksProvider = (
         for (const fingerprint of newFingerprints) acceptedFingerprints.add(fingerprint);
         quotes.push(...page);
 
-        if (!isFullPage) return ok(mapCollectedQuotes(quotes));
+        if (!isFullPage) {
+          const annotations = mapCollectedQuotes(quotes, book);
+          return annotations === undefined ? providerError("incomplete-data") : ok(annotations);
+        }
       }
 
       return providerError("incomplete-data");
