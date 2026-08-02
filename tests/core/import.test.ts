@@ -29,6 +29,19 @@ const settings: SettingsRepositoryPort = {
   save: vi.fn(() => Promise.resolve()),
 };
 
+interface Deferred<T> {
+  readonly promise: Promise<T>;
+  readonly resolve: (value: T) => void;
+}
+
+const deferred = <T>(): Deferred<T> => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolver) => {
+    resolve = resolver;
+  });
+  return { promise, resolve };
+};
+
 describe("import use case", () => {
   it("stops before provider access when the credential is missing", async () => {
     const provider = makeProvider("early");
@@ -102,6 +115,50 @@ describe("import use case", () => {
     expect(confirmed).toMatchObject({ ok: true, value: { annotationCount: 1 } });
     expect(provider.fetchAnnotations).toHaveBeenCalledOnce();
     expect(notes.create).toHaveBeenCalledOnce();
+  });
+
+  it("stops a deferred confirmed import before commit when its activity guard becomes inactive", async () => {
+    const pending = deferred<ProviderResult<readonly BookAnnotation[]>>();
+    const provider: ReadingProviderPort = {
+      ...makeProvider("deferred"),
+      fetchAnnotations: vi.fn(() => pending.promise),
+    };
+    const notes = {
+      inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })),
+      create: vi.fn(() => Promise.resolve()),
+      process: vi.fn(() => Promise.resolve()),
+      open: vi.fn(() => Promise.resolve()),
+    };
+    const load = vi.fn(() => Promise.resolve({ defaultFolder: "Books" }));
+    const save = vi.fn(() => Promise.resolve());
+    let active = true;
+    const useCase = createImportUseCase({
+      credentials: { get: vi.fn(() => "credential") },
+      settings: { load, save },
+      notes,
+      render: vi.fn(() => "note"),
+    });
+
+    const importing = useCase.execute({
+      provider,
+      book: selectedBook,
+      path: "Books/Title.md",
+      confirmed: true,
+      isActive: () => active,
+    });
+    await vi.waitFor(() => {
+      expect(provider.fetchAnnotations).toHaveBeenCalledOnce();
+    });
+    active = false;
+    pending.resolve({ ok: true, value: [createBookAnnotation({ text: "Highlight", inputIndex: 0 })] });
+
+    await expect(importing).resolves.toEqual({ ok: false, error: { category: "cancelled" } });
+    expect(notes.inspect).not.toHaveBeenCalled();
+    expect(notes.create).not.toHaveBeenCalled();
+    expect(notes.process).not.toHaveBeenCalled();
+    expect(notes.open).not.toHaveBeenCalled();
+    expect(load).not.toHaveBeenCalled();
+    expect(save).not.toHaveBeenCalled();
   });
 
   it("does not write an empty snapshot", async () => {

@@ -48,6 +48,12 @@ const cleanFilenamePart = (value: string, fallback: string): string => {
 export const sanitizeFilename = (author: string, title: string): string =>
   `${cleanFilenamePart(author, "Unknown Author")} - ${cleanFilenamePart(title, "Untitled")}.md`;
 
+export const sanitizeEditedFilename = (filename: string): string => {
+  const base = filename.trim().replace(/\.md$/i, "");
+  const cleaned = cleanFilenamePart(base, "Untitled");
+  return `${/^[.\s-]*$/.test(cleaned) ? "Untitled" : cleaned}.md`;
+};
+
 export const createDestination = (folder: string, filename: string): Result<string, DestinationError> => {
   if (hasControlCharacter(filename) || filename.includes("/") || filename.includes("\\") || filename.trim() === "") {
     return failure({ category: "unsafe-path" });

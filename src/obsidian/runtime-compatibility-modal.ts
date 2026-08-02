@@ -6,14 +6,20 @@ const resultText = (result: YandexRuntimeResult): string => JSON.stringify(resul
 
 export class RuntimeCompatibilityModal extends Modal {
   private credential = "";
+  private opened = false;
+  private requestGeneration = 0;
   private readonly harness: YandexRuntimeHarness;
+  private readonly onClosed: (() => void) | undefined;
 
-  constructor(app: App, harness: YandexRuntimeHarness) {
+  constructor(app: App, harness: YandexRuntimeHarness, onClosed?: () => void) {
     super(app);
     this.harness = harness;
+    this.onClosed = onClosed;
   }
 
   override onOpen(): void {
+    this.opened = true;
+    this.requestGeneration += 1;
     this.setTitle("Runtime compatibility harness");
     this.contentEl.empty();
 
@@ -68,20 +74,25 @@ export class RuntimeCompatibilityModal extends Modal {
       .addButton((button) => button
         .setButtonText("Run check")
         .onClick(async () => {
+          const requestGeneration = ++this.requestGeneration;
           button.setDisabled(true);
           resultEl.setText("Running compatibility check...");
           try {
             const result = await this.harness.run();
+            if (!this.opened || this.requestGeneration !== requestGeneration) return;
             resultEl.setText(resultText(result));
             new Notice(result.ok ? "Compatibility check completed." : `Compatibility check failed at ${result.stage}.`);
           } finally {
-            button.setDisabled(false);
+            if (this.opened && this.requestGeneration === requestGeneration) button.setDisabled(false);
           }
         }));
   }
 
   override onClose(): void {
+    this.opened = false;
+    this.requestGeneration += 1;
     this.credential = "";
     this.contentEl.empty();
+    this.onClosed?.();
   }
 }

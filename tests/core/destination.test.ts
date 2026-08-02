@@ -3,6 +3,7 @@ import {
   chooseDestinationFolder,
   createDestination,
   normalizeVaultPath,
+  sanitizeEditedFilename,
   sanitizeFilename,
 } from "../../src/core/destination";
 
@@ -33,5 +34,11 @@ describe("destination policy", () => {
     });
     expect(createDestination("Books\u0000", "Dune.md").ok).toBe(false);
     expect(createDestination("Books", "Dune\u0000.md").ok).toBe(false);
+  });
+
+  it("sanitizes an edited filename before destination confirmation", () => {
+    expect(sanitizeEditedFilename("  Dune: Part / One  ")).toBe("Dune - Part - One.md");
+    expect(sanitizeEditedFilename("Dune.md")).toBe("Dune.md");
+    expect(sanitizeEditedFilename("<>.md")).toBe("Untitled.md");
   });
 });
