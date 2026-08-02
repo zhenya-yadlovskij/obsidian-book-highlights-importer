@@ -13,7 +13,12 @@ const client = (overrides: Partial<YandexClient> = {}): YandexClient => ({
 interface LibraryCardFixture {
   readonly state: string;
   readonly readingProgress: number;
-  readonly book: { readonly uuid: string };
+  readonly book: {
+    readonly uuid: string;
+    readonly title?: string;
+    readonly name?: string;
+    readonly authors?: readonly { readonly name?: string }[];
+  };
 }
 
 const card = (uuid: string, state = "pending"): LibraryCardFixture => ({
@@ -146,6 +151,42 @@ describe("Yandex Books provider library", () => {
       expect.objectContaining({ bookId: "book-1", status: "in-progress" }),
       expect.objectContaining({ bookId: "book-101", status: "finished" }),
     ]));
+  });
+
+  it("maps book titles and author names from library cards", async () => {
+    const result = await createYandexBooksProvider(() => client({
+      getMyLibrary: () => Promise.resolve([
+        {
+          ...card("book-1", "reading"),
+          book: {
+            uuid: "book-1",
+            title: "  The Title Field  ",
+            authors: [{ name: "  First Author  " }, { name: "Second Author" }, { name: "  " }],
+          },
+        },
+        {
+          ...card("book-2", "finished"),
+          book: {
+            uuid: "book-2",
+            name: "  The Name Fallback  ",
+            authors: [{ name: "Fallback Author" }],
+          },
+        },
+      ]),
+    })).listBooks("secret");
+
+    expect(result).toEqual({ ok: true, value: [
+      expect.objectContaining({
+        bookId: "book-1",
+        title: "The Title Field",
+        authors: ["First Author", "Second Author"],
+      }),
+      expect.objectContaining({
+        bookId: "book-2",
+        title: "The Name Fallback",
+        authors: ["Fallback Author"],
+      }),
+    ] });
   });
 
   it.each<readonly [string, readonly (readonly unknown[])[]]>([
@@ -288,9 +329,25 @@ describe("Yandex Books provider quote mapping", () => {
     }] });
   });
 
+  it("normalizes bare carriage returns in quote text", async () => {
+    const result = await providerFor({
+      getUserQuotes: () => Promise.resolve([quote({ bookId: "book-1", content: "first\rsecond" })]),
+    }).fetchAnnotations("secret", selectedBook);
+
+    expect(result).toEqual({ ok: true, value: [expect.objectContaining({ text: "first\nsecond" })] });
+  });
+
   it("rejects an importable quote without an owning book identity", async () => {
     const result = await providerFor({
       getUserQuotes: () => Promise.resolve([quote({ bookId: undefined, content: "unowned" })]),
+    }).fetchAnnotations("secret", selectedBook);
+
+    expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
+  });
+
+  it("rejects an importable quote with a whitespace-only owning book UUID", async () => {
+    const result = await providerFor({
+      getUserQuotes: () => Promise.resolve([quote({ bookId: "  ", content: "unowned" })]),
     }).fetchAnnotations("secret", selectedBook);
 
     expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
@@ -331,6 +388,20 @@ describe("Yandex Books provider quote mapping", () => {
     expect(result.value[0]).not.toHaveProperty("sectionPath");
     expect(result.value[0]).not.toHaveProperty("readingProgress");
     expect(result.value[1]).not.toHaveProperty("createdAt");
+  });
+
+  it("omits non-finite quote progress", async () => {
+    const result = await providerFor({
+      getUserQuotes: () => Promise.resolve([
+        quote({ bookId: "book-1", progress: Number.NaN }),
+        quote({ bookId: "book-1", progress: Number.POSITIVE_INFINITY }),
+      ]),
+    }).fetchAnnotations("secret", selectedBook);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value[0]).not.toHaveProperty("progress");
+    expect(result.value[1]).not.toHaveProperty("progress");
   });
 
   it("does not expose credentials or thrown provider text", async () => {

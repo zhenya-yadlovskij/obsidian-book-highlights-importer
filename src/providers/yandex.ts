@@ -49,6 +49,18 @@ const isUnknownArray = (value: unknown): value is readonly unknown[] => Array.is
 const normalizedText = (value: unknown): string =>
   typeof value === "string" ? value.trim() : "";
 
+const libraryTitle = (book: Record<string, unknown>): string =>
+  normalizedText(book.title) || normalizedText(book.name);
+
+const libraryAuthors = (book: Record<string, unknown>): readonly string[] => {
+  if (!isUnknownArray(book.authors)) return [];
+
+  return book.authors.flatMap((author) => {
+    const name = isRecord(author) ? normalizedText(author.name) : "";
+    return name ? [name] : [];
+  });
+};
+
 const sanitizeText = (value: unknown): string | undefined => {
   if (typeof value !== "string") return undefined;
 
@@ -165,8 +177,8 @@ export const createYandexBooksProvider = (
           books.push(createProviderBook({
             providerId: "yandex-books",
             bookId,
-            title: "",
-            authors: [],
+            title: libraryTitle(card.book),
+            authors: libraryAuthors(card.book),
             status: libraryStatus(card.state),
           }));
         }
@@ -204,8 +216,6 @@ export const createYandexBooksProvider = (
         }
 
         const newFingerprints = new Set(fingerprints);
-        if (isFullPage && newFingerprints.size === 0) return providerError("incomplete-data");
-
         if (signature !== undefined) pageSignatures.add(signature);
         for (const fingerprint of newFingerprints) acceptedFingerprints.add(fingerprint);
         quotes.push(...page);
