@@ -17,7 +17,7 @@
     "verify:release": "node scripts/verify-release.mjs"
   },
   "dependencies": {
-    "yandex-book-api-ts": "file:./yandex-book-api-ts-0.0.3.tgz"
+    "yandex-book-api-ts": "^1.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
