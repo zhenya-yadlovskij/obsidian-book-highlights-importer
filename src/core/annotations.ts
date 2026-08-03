@@ -12,15 +12,20 @@ const numericOrInfinity = (value: number | undefined): number =>
 const position = (annotation: BookAnnotation): number =>
   numericOrInfinity(annotation.location ?? annotation.progress);
 
+const compareNumbers = (left: number, right: number): number => {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
+};
+
 export const orderAnnotations = (annotations: readonly BookAnnotation[]): readonly BookAnnotation[] =>
   [...annotations].sort((left, right) => {
-    const sectionDifference = numericOrInfinity(left.sectionOrder) - numericOrInfinity(right.sectionOrder);
+    const sectionDifference = compareNumbers(numericOrInfinity(left.sectionOrder), numericOrInfinity(right.sectionOrder));
     if (sectionDifference !== 0) return sectionDifference;
 
-    const positionDifference = position(left) - position(right);
+    const positionDifference = compareNumbers(position(left), position(right));
     if (positionDifference !== 0) return positionDifference;
 
-    const creationDifference = numericOrInfinity(left.createdAt) - numericOrInfinity(right.createdAt);
+    const creationDifference = compareNumbers(numericOrInfinity(left.createdAt), numericOrInfinity(right.createdAt));
     if (creationDifference !== 0) return creationDifference;
 
     return left.inputIndex - right.inputIndex;

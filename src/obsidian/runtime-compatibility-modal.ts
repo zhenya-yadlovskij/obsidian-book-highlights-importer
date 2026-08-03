@@ -70,7 +70,7 @@ export class RuntimeCompatibilityModal extends Modal {
     const resultEl = this.contentEl.createEl("pre", { text: "No compatibility check run yet." });
     new Setting(this.contentEl)
       .setName("Package compatibility")
-      .setDesc("Calls profile, library, and account quotes and reports only sanitized counts and status data.")
+      .setDesc("Calls profile, library, and one selected-book CSV quote export and reports only sanitized counts and status data.")
       .addButton((button) => button
         .setButtonText("Run check")
         .onClick(async () => {

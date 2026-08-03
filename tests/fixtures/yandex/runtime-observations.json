@@ -59,6 +59,21 @@
       "itemUuidUniqueCount": 3
     }
   },
+  "selectedBookQuoteExport": {
+    "packageVersion": "0.0.3",
+    "desktop": {
+      "status": "not-run",
+      "structuralStatus": "not-observed",
+      "rowCount": null,
+      "importableCount": null
+    },
+    "mobile": {
+      "status": "not-run",
+      "structuralStatus": "not-observed",
+      "rowCount": null,
+      "importableCount": null
+    }
+  },
   "secretStorage": {
     "evidence": "manual supported-runtime verification",
     "desktop": {

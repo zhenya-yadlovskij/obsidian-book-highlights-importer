@@ -172,9 +172,7 @@ const success: YandexRuntimeResult = {
   quotes: {
     count: 0,
     importableCount: 0,
-    missingBookIdentityCount: 0,
-    itemUuidPresentCount: 0,
-    itemUuidUniqueCount: 0,
+    structuralStatus: "valid",
   },
 };
 

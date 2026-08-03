@@ -5,6 +5,8 @@ import {
   UnauthorizedError,
 } from "yandex-book-api-ts";
 
+import { parseYandexQuoteCsv } from "../providers/yandex-quotes-csv";
+
 export const YANDEX_TOKEN_SECRET_ID = "book-highlights-importer-yandex-books-token";
 
 export interface RuntimeSecretStorage {
@@ -26,18 +28,10 @@ interface RuntimeLibraryCard {
   readonly book?: RuntimeBook;
 }
 
-interface RuntimeQuote {
-  readonly itemUuid?: string;
-  readonly content?: string;
-  readonly comment?: string;
-  readonly book?: RuntimeBook;
-  readonly authorsObjects: readonly unknown[];
-}
-
 export interface YandexRuntimeClient {
   readonly getProfile: () => Promise<RuntimeProfile | undefined>;
   readonly getMyLibrary: (limit?: number, offset?: number) => Promise<readonly RuntimeLibraryCard[]>;
-  readonly getUserQuotes: (userId: string, page?: number, perPage?: number) => Promise<readonly RuntimeQuote[]>;
+  readonly exportBookQuotes: (bookId: string, format: "csv") => Promise<string>;
 }
 
 export interface RuntimeStateEvidence {
@@ -57,9 +51,7 @@ export type YandexRuntimeResult =
     readonly quotes: {
       readonly count: number;
       readonly importableCount: number;
-      readonly missingBookIdentityCount: number;
-      readonly itemUuidPresentCount: number;
-      readonly itemUuidUniqueCount: number;
+      readonly structuralStatus: "valid";
     };
   }
   | {
@@ -201,27 +193,36 @@ export const createYandexRuntimeHarness = (
       return failure("library", error);
     }
 
-    let quotes: readonly RuntimeQuote[];
+    const selectedBookId = library
+      .map((card) => card.book?.uuid?.trim())
+      .find((bookId): bookId is string => bookId !== undefined && bookId !== "");
+    if (selectedBookId === undefined) {
+      return { ok: false, stage: "library", errorType: "MissingBookId" };
+    }
+
+    let exportText: string;
     try {
-      quotes = await client.getUserQuotes(login, 1, 100);
+      exportText = await client.exportBookQuotes(selectedBookId, "csv");
     } catch (error) {
       return failure("quotes", error);
     }
-    const hasText = (value: string | undefined): boolean => (value?.trim().length ?? 0) > 0;
-    const importable = quotes.filter((quote) => hasText(quote.content) || hasText(quote.comment));
-    const itemUuids = quotes
-      .map((quote) => quote.itemUuid?.trim())
-      .filter((itemUuid): itemUuid is string => itemUuid !== undefined && itemUuid !== "");
+
+    let rows: ReturnType<typeof parseYandexQuoteCsv>;
+    try {
+      rows = parseYandexQuoteCsv(exportText);
+    } catch {
+      return { ok: false, stage: "quotes", errorType: "InvalidQuoteExport" };
+    }
+    const hasText = (value: string): boolean => value.trim().length > 0;
+    const importableCount = rows.filter((row) => hasText(row.content) || hasText(row.comment)).length;
 
     return Object.freeze({
       ok: true,
       library: Object.freeze({ count: library.length, states: summarizeStates(library) }),
       quotes: Object.freeze({
-        count: quotes.length,
-        importableCount: importable.length,
-        missingBookIdentityCount: importable.filter((quote) => !quote.book?.uuid?.trim()).length,
-        itemUuidPresentCount: itemUuids.length,
-        itemUuidUniqueCount: new Set(itemUuids).size,
+        count: rows.length,
+        importableCount,
+        structuralStatus: "valid",
       }),
     });
   };

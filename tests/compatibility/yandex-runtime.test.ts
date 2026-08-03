@@ -19,10 +19,12 @@ const createClient = (): YandexRuntimeClient => ({
     { state: "reading", readingProgress: 0.25, book: { uuid: "book-1" } },
     { state: "finished", readingProgress: 1, book: { uuid: "book-2" } },
   ]),
-  getUserQuotes: vi.fn().mockResolvedValue([
-    { itemUuid: "quote-1", content: "Highlight", authorsObjects: [], book: { uuid: "book-1" } },
-    { itemUuid: "quote-2", comment: "Comment", authorsObjects: [], book: { uuid: "book-2" } },
-  ]),
+  exportBookQuotes: vi.fn().mockResolvedValue([
+    "book_title,book_authors,content,comment,color,created_at",
+    '"Synthetic","Author","Highlight","",blue,"2025-01-01 00:00:00 +0000"',
+    '"Synthetic","Author","","Comment",yellow,"2025-01-01 00:00:00 +0000"',
+    "",
+  ].join("\n")),
 });
 
 describe("Yandex runtime compatibility harness", () => {
@@ -47,7 +49,7 @@ describe("Yandex runtime compatibility harness", () => {
     expect(harness.isConfigured()).toBe(false);
   });
 
-  it("uses profile login and returns sanitized compatibility evidence", async () => {
+  it("selects a library book and returns sanitized export evidence", async () => {
     const client = createClient();
     const harness = createYandexRuntimeHarness(
       { getSecret: () => "secret", setSecret: vi.fn() },
@@ -66,12 +68,10 @@ describe("Yandex runtime compatibility harness", () => {
       quotes: {
         count: 2,
         importableCount: 2,
-        missingBookIdentityCount: 0,
-        itemUuidPresentCount: 2,
-        itemUuidUniqueCount: 2,
+        structuralStatus: "valid",
       },
     });
-    expect(client.getUserQuotes).toHaveBeenCalledWith("reader-login", 1, 100);
+    expect(client.exportBookQuotes).toHaveBeenCalledWith("book-1", "csv");
   });
 
   it("stops before constructing a client when the credential is blank", async () => {
@@ -95,7 +95,33 @@ describe("Yandex runtime compatibility harness", () => {
 
     await expect(harness.run()).resolves.toEqual({ ok: false, stage: "profile", errorType: "MissingLogin" });
     expect(client.getMyLibrary).not.toHaveBeenCalled();
-    expect(client.getUserQuotes).not.toHaveBeenCalled();
+    expect(client.exportBookQuotes).not.toHaveBeenCalled();
+  });
+
+  it("fails safely when no library card has a usable book ID", async () => {
+    const client = createClient();
+    vi.mocked(client.getMyLibrary).mockResolvedValue([
+      { state: "reading", book: { uuid: "  " } },
+      { state: "finished", book: {} },
+    ]);
+    const harness = createYandexRuntimeHarness(
+      { getSecret: () => "secret", setSecret: vi.fn() },
+      () => client,
+    );
+
+    await expect(harness.run()).resolves.toEqual({ ok: false, stage: "library", errorType: "MissingBookId" });
+    expect(client.exportBookQuotes).not.toHaveBeenCalled();
+  });
+
+  it("fails safely when the selected-book export is malformed", async () => {
+    const client = createClient();
+    vi.mocked(client.exportBookQuotes).mockResolvedValue("book_title,content\nSynthetic,valid");
+    const harness = createYandexRuntimeHarness(
+      { getSecret: () => "secret", setSecret: vi.fn() },
+      () => client,
+    );
+
+    await expect(harness.run()).resolves.toEqual({ ok: false, stage: "quotes", errorType: "InvalidQuoteExport" });
   });
 
   it("reports only the failure type and status", async () => {

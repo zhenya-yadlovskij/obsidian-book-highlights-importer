@@ -34,8 +34,13 @@ const profile = await report("getProfile", () => client.getProfile());
 if (!profile?.login?.trim()) {
   failed = true;
 } else {
-  await report("getMyLibrary", () => client.getMyLibrary(100, 0));
-  await report("getUserQuotes", () => client.getUserQuotes(profile.login, 1, 100));
+  const library = await report("getMyLibrary", () => client.getMyLibrary(100, 0));
+  const bookId = library?.find((card) => card?.book?.uuid?.trim())?.book?.uuid?.trim();
+  if (!bookId) {
+    failed = true;
+  } else {
+    await report("exportBookQuotes", () => client.exportBookQuotes(bookId, "csv"));
+  }
 }
 
 if (failed) process.exitCode = 1;

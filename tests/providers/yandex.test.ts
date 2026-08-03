@@ -1,12 +1,14 @@
 import { ApiError, UnauthorizedError } from "yandex-book-api-ts";
 import { describe, expect, it, vi } from "vitest";
+
+import { orderAnnotations } from "../../src/core/annotations";
 import { createProviderBook } from "../../src/core/models";
 import { createYandexBooksProvider, type YandexClient } from "../../src/providers/yandex";
 
 const client = (overrides: Partial<YandexClient> = {}): YandexClient => ({
   getProfile: () => Promise.resolve(undefined),
   getMyLibrary: () => Promise.resolve([]),
-  getUserQuotes: () => Promise.resolve([]),
+  exportBookQuotes: () => Promise.resolve("book_title,book_authors,content,comment,color,created_at\n"),
   ...overrides,
 });
 
@@ -33,80 +35,32 @@ const fullPageOf = (count: number, state = "pending"): readonly LibraryCardFixtu
 const fullPageWithoutTextBookIds = (count: number): readonly { readonly book: { readonly uuid: string } }[] =>
   Array.from({ length: count }, () => ({ book: { uuid: "  " } }));
 
-interface QuoteFixture {
-  readonly itemUuid: string;
-  readonly cfi: string;
-  readonly startNodeXpath: string;
-  readonly startNodeOffset: number;
-  readonly finishNodeXpath: string;
-  readonly finishNodeOffset: number;
-  readonly content: string;
-  readonly comment: string;
-  readonly progress: number;
-  readonly createdAt?: number;
-  readonly book: { readonly uuid?: string };
-}
-
-const quote = (overrides: Partial<{
-  readonly bookId: string | undefined;
-  readonly itemUuid: string;
-  readonly cfi: string;
-  readonly startNodeXpath: string;
-  readonly startNodeOffset: number;
-  readonly finishNodeXpath: string;
-  readonly finishNodeOffset: number;
-  readonly content: string;
-  readonly comment: string;
-  readonly progress: number;
-  readonly createdAt: number | undefined;
-}> = {}): QuoteFixture => {
-  const {
-    itemUuid = "unstable-item-uuid",
-    cfi = "epubcfi(/6/2)",
-    startNodeXpath = "/html/body/p[1]",
-    startNodeOffset = 0,
-    finishNodeXpath = "/html/body/p[1]",
-    finishNodeOffset = 9,
-    content = "quote",
-    comment = "comment",
-    progress = 0.5,
-    createdAt,
-  } = overrides;
-  const bookId = "bookId" in overrides ? overrides.bookId : "book-1";
-
-  return {
-    itemUuid,
-    cfi,
-    startNodeXpath,
-    startNodeOffset,
-    finishNodeXpath,
-    finishNodeOffset,
-    content,
-    comment,
-    progress,
-    ...(createdAt === undefined ? {} : { createdAt }),
-    book: bookId === undefined ? {} : { uuid: bookId },
-  };
-};
-
-const fullQuotePageOf = (count: number, bookId: string, prefix = "quote"): readonly QuoteFixture[] =>
-  Array.from({ length: count }, (_value, index) => quote({
-    bookId,
-    itemUuid: `unstable-item-${prefix}-${String(index + 1)}`,
-    content: `${prefix}-${String(index + 1)}`,
-  }));
-
 const selectedBook = createProviderBook({
   providerId: "yandex-books",
   bookId: "book-1",
-  title: "Selected book",
-  authors: [],
+  title: "Library title",
+  authors: ["Library author"],
 });
 
-const providerFor = (overrides: Partial<YandexClient> = {}): ReturnType<typeof createYandexBooksProvider> => createYandexBooksProvider(() => client({
+const providerFor = (
+  overrides: Partial<YandexClient> = {},
+): ReturnType<typeof createYandexBooksProvider> => createYandexBooksProvider(() => client({
   getProfile: () => Promise.resolve({ login: "reader" }),
   ...overrides,
 }));
+
+const csv = (rows: readonly Partial<Record<
+  "book_title" | "book_authors" | "content" | "comment" | "color" | "created_at",
+  string
+>>[]): string => {
+  const headers = ["book_title", "book_authors", "content", "comment", "color", "created_at"] as const;
+  const escape = (value: string): string => `"${value.replaceAll('"', '""')}"`;
+  return [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => escape(row[header] ?? "")).join(",")),
+    "",
+  ].join("\n");
+};
 
 describe("Yandex Books provider credential validation", () => {
   it("accepts a profile with a non-blank login", async () => {
@@ -176,23 +130,15 @@ describe("Yandex Books provider library", () => {
     })).listBooks("secret");
 
     expect(result).toEqual({ ok: true, value: [
-      expect.objectContaining({
-        bookId: "book-1",
-        title: "The Title Field",
-        authors: ["First Author", "Second Author"],
-      }),
-      expect.objectContaining({
-        bookId: "book-2",
-        title: "The Name Fallback",
-        authors: ["Fallback Author"],
-      }),
+      expect.objectContaining({ bookId: "book-1", title: "The Title Field", authors: ["First Author", "Second Author"] }),
+      expect.objectContaining({ bookId: "book-2", title: "The Name Fallback", authors: ["Fallback Author"] }),
     ] });
   });
 
   it.each<readonly [string, readonly (readonly unknown[])[]]>([
     ["repeats a full page", [fullPageOf(100), fullPageOf(100)]],
     ["receives no usable books in a full page", [fullPageWithoutTextBookIds(100)]],
-  ])("rejects incomplete library data when it %s", async (_name, pages) => {
+  ] as const)("rejects incomplete library data when it %s", async (_name, pages) => {
     const result = await createYandexBooksProvider(() => client({
       getMyLibrary: (_limit, offset) => Promise.resolve(pages[(offset ?? 0) / 100] ?? []),
     })).listBooks("secret");
@@ -236,181 +182,123 @@ describe("Yandex Books provider library", () => {
       getMyLibrary: () => Promise.resolve([card("book-1", "pending")]),
     })).listBooks("secret");
 
-    expect(result).toEqual({ ok: true, value: [expect.objectContaining({
-      bookId: "book-1",
-      status: "unknown",
-    })] });
+    expect(result).toEqual({ ok: true, value: [expect.objectContaining({ bookId: "book-1", status: "unknown" })] });
     if (result.ok) expect(result.value[0]).not.toHaveProperty("progress");
   });
 });
 
-describe("Yandex Books provider quote pagination", () => {
-  it("uses the authenticated profile login and stops after a short quote page", async () => {
-    const getUserQuotes = vi.fn<YandexClient["getUserQuotes"]>()
-      .mockResolvedValueOnce(fullQuotePageOf(100, "book-1"))
-      .mockResolvedValueOnce([quote({ bookId: "book-1", content: "last" })]);
+describe("Yandex Books selected-book quote export", () => {
+  it("calls the selected-book CSV export once without requiring profile login", async () => {
+    const getProfile = vi.fn<YandexClient["getProfile"]>(() => Promise.reject(new Error("profile should not be used")));
+    const exportBookQuotes = vi.fn<YandexClient["exportBookQuotes"]>(() => Promise.resolve(csv([])));
+    const result = await providerFor({ getProfile, exportBookQuotes }).fetchAnnotations("secret", selectedBook);
 
-    const result = await providerFor({ getUserQuotes }).fetchAnnotations("secret", selectedBook);
-
-    expect(getUserQuotes).toHaveBeenNthCalledWith(1, "reader", 1, 100);
-    expect(getUserQuotes).toHaveBeenNthCalledWith(2, "reader", 2, 100);
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(Array.isArray(result.value)).toBe(true);
+    expect(exportBookQuotes).toHaveBeenCalledOnce();
+    expect(exportBookQuotes).toHaveBeenCalledWith("book-1", "csv");
+    expect(getProfile).not.toHaveBeenCalled();
+    expect(result).toEqual({ ok: true, value: [] });
   });
 
-  it("preserves identical records on one page", async () => {
-    const duplicate = quote({ bookId: "book-1", content: "same" });
-
-    const result = await providerFor({ getUserQuotes: () => Promise.resolve([duplicate, duplicate]) })
-      .fetchAnnotations("secret", selectedBook);
-
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value.map(({ inputIndex }) => inputIndex)).toEqual([0, 1]);
-  });
-
-  it.each<readonly [string, readonly (readonly unknown[])[]]>([
-    ["a repeated full page", [fullQuotePageOf(100, "book-1"), fullQuotePageOf(100, "book-1")]],
-    ["a cross-page fingerprint overlap despite different item UUIDs", [
-      fullQuotePageOf(100, "book-1"),
-      [quote({ bookId: "book-1", content: "quote-1", itemUuid: "another-unstable-item" })],
-    ]],
-    ["a malformed page", [{} as unknown as readonly unknown[]]],
-    ["a full page with no new normalized fingerprint", [
-      fullQuotePageOf(100, "book-1"),
-      [...fullQuotePageOf(100, "book-1")].reverse(),
-    ]],
-  ] as const)("fails rather than returning a partial snapshot on %s", async (_name, pages) => {
+  it("maps sanitized content and comments while preserving export row indexes", async () => {
     const result = await providerFor({
-      getUserQuotes: (_login, page) => Promise.resolve(pages[(page ?? 1) - 1] ?? []),
-    }).fetchAnnotations("secret", selectedBook);
-
-    expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
-  });
-
-  it("fails after the 100-page quote limit", async () => {
-    const getUserQuotes = vi.fn<YandexClient["getUserQuotes"]>((_login, page) =>
-      Promise.resolve(fullQuotePageOf(100, "book-1", `page-${String(page)}`)),
-    );
-
-    const result = await providerFor({ getUserQuotes }).fetchAnnotations("secret", selectedBook);
-
-    expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
-    expect(getUserQuotes).toHaveBeenCalledTimes(100);
-    expect(getUserQuotes).toHaveBeenLastCalledWith("reader", 100, 100);
-  });
-
-  it.each([undefined, { login: "  " }] as const)("rejects a missing or blank profile login without fetching quotes", async (profile) => {
-    const getUserQuotes = vi.fn<YandexClient["getUserQuotes"]>();
-
-    const result = await providerFor({
-      getProfile: () => Promise.resolve(profile),
-      getUserQuotes,
-    }).fetchAnnotations("secret", selectedBook);
-
-    expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
-    expect(getUserQuotes).not.toHaveBeenCalled();
-  });
-});
-
-describe("Yandex Books provider quote mapping", () => {
-  it("maps selected-book highlights and comments with sanitized text", async () => {
-    const result = await providerFor({
-      getUserQuotes: () => Promise.resolve([
-        quote({ bookId: "book-1", content: "<b> Highlight </b>\r\ntext", comment: " Note " }),
-        quote({ bookId: "other-book", content: "ignore" }),
-      ]),
-    }).fetchAnnotations("secret", selectedBook);
-
-    expect(result).toEqual({ ok: true, value: [{
-      text: "Highlight \ntext",
-      comment: "Note",
-      progress: expect.any(Number) as unknown,
-      inputIndex: 0,
-    }] });
-  });
-
-  it("normalizes bare carriage returns in quote text", async () => {
-    const result = await providerFor({
-      getUserQuotes: () => Promise.resolve([quote({ bookId: "book-1", content: "first\rsecond" })]),
-    }).fetchAnnotations("secret", selectedBook);
-
-    expect(result).toEqual({ ok: true, value: [expect.objectContaining({ text: "first\nsecond" })] });
-  });
-
-  it("rejects an importable quote without an owning book identity", async () => {
-    const result = await providerFor({
-      getUserQuotes: () => Promise.resolve([quote({ bookId: undefined, content: "unowned" })]),
-    }).fetchAnnotations("secret", selectedBook);
-
-    expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
-  });
-
-  it("rejects an importable quote with a whitespace-only owning book UUID", async () => {
-    const result = await providerFor({
-      getUserQuotes: () => Promise.resolve([quote({ bookId: "  ", content: "unowned" })]),
-    }).fetchAnnotations("secret", selectedBook);
-
-    expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
-  });
-
-  it("excludes a quote only when both highlight and comment are blank", async () => {
-    const result = await providerFor({
-      getUserQuotes: () => Promise.resolve([
-        quote({ bookId: undefined, content: " ", comment: " " }),
-        quote({ bookId: "book-1", content: " ", comment: "comment-only" }),
-      ]),
-    }).fetchAnnotations("secret", selectedBook);
-
-    expect(result).toEqual({ ok: true, value: [expect.objectContaining({ comment: "comment-only" })] });
-  });
-
-  it("maps only verified fields and includes creation times only when finite", async () => {
-    const result = await providerFor({
-      getUserQuotes: () => Promise.resolve([{
-        ...quote({ bookId: "book-1", progress: 0.5, createdAt: 1_700_000_000 }),
-        readingProgress: 0.75,
-      }, quote({ bookId: "book-1", createdAt: Number.NaN })]),
+      exportBookQuotes: () => Promise.resolve(csv([
+        { book_title: "Export title", book_authors: "Export author", content: " ", comment: " " },
+        { content: "<b> Highlight </b>\r\ntext", comment: " Note ", color: "yellow" },
+        { content: "", comment: "comment-only", color: "blue" },
+        { content: "Unicode café 東京\nmultiline", comment: "" },
+      ])),
     }).fetchAnnotations("secret", selectedBook);
 
     expect(result).toEqual({ ok: true, value: [
-      expect.objectContaining({
-        text: "quote",
-        comment: "comment",
-        progress: 0.5,
-        createdAt: 1_700_000_000,
-        inputIndex: 0,
-      }),
-      expect.objectContaining({ inputIndex: 1 }),
+      { text: "Highlight \ntext", comment: "Note", inputIndex: 1 },
+      { comment: "comment-only", inputIndex: 2 },
+      { text: "Unicode café 東京\nmultiline", inputIndex: 3 },
     ] });
-    if (!result.ok) return;
-    expect(result.value[0]).not.toHaveProperty("sourceKey");
-    expect(result.value[0]).not.toHaveProperty("location");
-    expect(result.value[0]).not.toHaveProperty("sectionPath");
-    expect(result.value[0]).not.toHaveProperty("readingProgress");
-    expect(result.value[1]).not.toHaveProperty("createdAt");
   });
 
-  it("omits non-finite quote progress", async () => {
+  it("does not copy export metadata, color, progress, or source identifiers", async () => {
     const result = await providerFor({
-      getUserQuotes: () => Promise.resolve([
-        quote({ bookId: "book-1", progress: Number.NaN }),
-        quote({ bookId: "book-1", progress: Number.POSITIVE_INFINITY }),
-      ]),
+      exportBookQuotes: () => Promise.resolve(csv([{
+        book_title: "Wrong title",
+        book_authors: "Wrong author",
+        content: "text",
+        comment: "comment",
+        color: "yellow",
+        created_at: "2025-01-01 10:00:00 +0300",
+      }])),
+    }).fetchAnnotations("secret", selectedBook);
+
+    expect(result).toEqual({ ok: true, value: [{
+      text: "text",
+      comment: "comment",
+      createdAt: 1_735_714_800,
+      inputIndex: 0,
+    }] });
+    if (result.ok) {
+      expect(result.value[0]).not.toHaveProperty("progress");
+      expect(result.value[0]).not.toHaveProperty("sourceKey");
+    }
+  });
+
+  it("preserves identical importable rows as separate immutable annotations", async () => {
+    const result = await providerFor({
+      exportBookQuotes: () => Promise.resolve(csv([
+        { content: "same", comment: "same" },
+        { content: "same", comment: "same" },
+      ])),
+    }).fetchAnnotations("secret", selectedBook);
+
+    expect(result).toEqual({ ok: true, value: [
+      { text: "same", comment: "same", inputIndex: 0 },
+      { text: "same", comment: "same", inputIndex: 1 },
+    ] });
+    if (result.ok) {
+      expect(Object.isFrozen(result.value)).toBe(true);
+      expect(Object.isFrozen(result.value[0])).toBe(true);
+    }
+  });
+
+  it("orders absolute times oldest first and leaves equal or undated rows stable", async () => {
+    const result = await providerFor({
+      exportBookQuotes: () => Promise.resolve(csv([
+        { content: "equal first", created_at: "2025-01-01 08:30:00 +0000" },
+        { content: "undated", created_at: "invalid" },
+        { content: "older absolute", created_at: "2025-01-01 10:00:00 +0300" },
+        { content: "equal second", created_at: "2025-01-01 08:30:00 +0000" },
+        { content: "blank date", created_at: "" },
+      ])),
     }).fetchAnnotations("secret", selectedBook);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.value[0]).not.toHaveProperty("progress");
-    expect(result.value[1]).not.toHaveProperty("progress");
+    expect(orderAnnotations(result.value).map(({ text }) => text)).toEqual([
+      "older absolute",
+      "equal first",
+      "equal second",
+      "undated",
+      "blank date",
+    ]);
   });
 
-  it("does not expose credentials or thrown provider text", async () => {
-    const result = await providerFor({
-      getUserQuotes: () => Promise.reject(new Error("<unsafe provider detail>")),
-    }).fetchAnnotations("secret-token", selectedBook);
+  it.each([
+    ["UnauthorizedError", new UnauthorizedError("unsafe"), "authentication"],
+    ["a client error", new ApiError("bad request", { status: 400 }), "incomplete-data"],
+    ["an unavailable error", new TypeError("offline"), "provider-unavailable"],
+  ] as const)("preserves sanitized provider error categories for %s", async (_name, error, category) => {
+    const result = await providerFor({ exportBookQuotes: () => Promise.reject(error) }).fetchAnnotations("secret-token", selectedBook);
 
-    expect(result).toEqual({ ok: false, error: { category: "provider-unavailable", providerId: "yandex-books" } });
+    expect(result).toEqual({ ok: false, error: { category, providerId: "yandex-books" } });
     expect(JSON.stringify(result)).not.toContain("secret-token");
-    expect(JSON.stringify(result)).not.toContain("unsafe provider detail");
+    expect(JSON.stringify(result)).not.toContain("unsafe");
+  });
+
+  it.each([
+    ["malformed CSV", "book_title,content\nbook,text"],
+    ["a valid prefix followed by malformed CSV", `${csv([{ content: "valid" }])}bad"unterminated`],
+  ])("fails completely for %s", async (_name, exportText) => {
+    const result = await providerFor({ exportBookQuotes: () => Promise.resolve(exportText) })
+      .fetchAnnotations("secret", selectedBook);
+
+    expect(result).toEqual({ ok: false, error: { category: "incomplete-data", providerId: "yandex-books" } });
   });
 });

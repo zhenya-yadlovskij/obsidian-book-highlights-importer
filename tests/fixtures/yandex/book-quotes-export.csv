@@ -1,0 +1,7 @@
+book_title,book_authors,content,comment,color,created_at
+"Книга-образец","Автор Пример","Цитата с запятой, внутри","Комментарий с ""кавычками""",blue,"2025-01-01 10:00:00 +0300"
+"Synthetic Almanac","A. Example","Unicode: café, 東京, and Ж","",yellow,"2025-01-01 08:30:00 +0000"
+"Synthetic Almanac","A. Example","First line
+Second line","Note on two lines",blue,"2025-01-01 08:30:00 +0000"
+"Synthetic Almanac","A. Example","Same instant, later row","",yellow,"2025-01-01 08:30:00 +0000"
+"Synthetic Almanac","A. Example","Offset example","A final synthetic note",blue,"2025-01-02 12:00:00 -0500"
