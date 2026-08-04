@@ -26,7 +26,6 @@ export interface ExecuteRequest {
   readonly provider: ReadingProviderPort;
   readonly book: ProviderBook;
   readonly path: string;
-  readonly confirmed: boolean;
   readonly snapshot?: ImportSnapshot;
   readonly isActive?: () => boolean;
 }
@@ -128,7 +127,6 @@ export const createImportUseCase = (dependencies: ImportDependencies): ImportUse
   };
 
   const execute = async (request: ExecuteRequest): Promise<ImportResult> => {
-    if (!request.confirmed) return failure({ category: "confirmation-required" });
     if (request.isActive?.() === false) return failure({ category: "cancelled" });
 
     let snapshot: ImportSnapshot;

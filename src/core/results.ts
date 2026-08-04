@@ -20,7 +20,6 @@ export type ImportError =
   | { readonly category: "authentication"; readonly providerId: string }
   | { readonly category: "provider-unavailable"; readonly providerId: string }
   | { readonly category: "incomplete-data"; readonly providerId: string }
-  | { readonly category: "confirmation-required" }
   | { readonly category: "empty-snapshot" }
   | { readonly category: "invalid-snapshot" }
   | { readonly category: "cancelled" }

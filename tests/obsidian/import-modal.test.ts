@@ -281,7 +281,7 @@ describe("import modal", () => {
     expect(renderedSettings.map((setting) => setting.name)).not.toContain("Foundation");
   });
 
-  it("drives provider, book, destination, review, importing, and completion with native controls", async () => {
+  it("drives provider, book, destination, importing, and completion with native controls", async () => {
     let resolveImport!: (value: {
       readonly ok: true;
       readonly value: {
@@ -318,7 +318,7 @@ describe("import modal", () => {
     modal.open();
     expect((modal as unknown as { title: string }).title).toBe("Import Book Highlights");
     expect((modal.contentEl as unknown as FakeElement).children.map((child) => child.text)).toContain(
-      "Provider > Book > Destination > Review",
+      "Provider > Book > Destination",
     );
     expect(settingNamed("Provider").description).toBe("Configured");
 
@@ -331,11 +331,9 @@ describe("import modal", () => {
     expect(settingNamed("Filename").texts[0]?.value).toBe("Frank Herbert - Dune.md");
 
     await settingNamed("Filename").texts[0]?.change("Dune: Notes");
-    await buttonNamed("Review").click();
-    expect(execute).not.toHaveBeenCalled();
-    expect(settingNamed("Annotations").description).toBe("1");
+    expect(settingNamed("Importable annotations").description).toBe("1");
 
-    const confirm = buttonNamed("Import").click();
+    const importing = buttonNamed("Import").click();
     await Promise.resolve();
     expect(renderedSettings.flatMap((setting) => setting.buttons).map((button) => button.text)).not.toContain("Cancel");
     expect((modal.contentEl as unknown as FakeElement).children.map((child) => child.text)).toContain("Importing...");
@@ -350,7 +348,7 @@ describe("import modal", () => {
         warnings: [{ category: "post-commit-warning", kind: "open-note" }],
       },
     });
-    await confirm;
+    await importing;
     expect((modal.contentEl as unknown as FakeElement).children.map((child) => child.text)).toContain(
       "Imported 1 annotation.",
     );
@@ -429,7 +427,7 @@ describe("import modal", () => {
     expect((modal.contentEl as unknown as FakeElement).children).toEqual([]);
   });
 
-  it("force unload cancels a deferred confirmed import before note or post-commit operations", async () => {
+  it("force unload cancels a deferred import before note or post-commit operations", async () => {
     const annotations = deferred<ProviderResult<readonly BookAnnotation[]>>();
     const deferredProvider: ReadingProviderPort = {
       ...provider,
@@ -462,8 +460,7 @@ describe("import modal", () => {
     const controller = (modal as unknown as { controller: ImportWizardController }).controller;
     await controller.selectProvider("provider");
     await controller.selectBook("dune");
-    controller.review();
-    const importing = controller.confirm();
+    const importing = controller.import();
     expect(controller.getState()).toMatchObject({ kind: "importing" });
     await vi.waitFor(() => {
       expect(deferredProvider.fetchAnnotations).toHaveBeenCalledOnce();

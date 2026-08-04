@@ -42,14 +42,6 @@ export type ImportWizardState =
       readonly annotationCount: number | undefined;
     }
   | {
-      readonly kind: "review";
-      readonly providerId: string;
-      readonly providerName: string;
-      readonly book: ProviderBook;
-      readonly path: string;
-      readonly annotationCount: number | undefined;
-    }
-  | {
       readonly kind: "importing";
       readonly providerId: string;
       readonly bookId: string;
@@ -57,7 +49,7 @@ export type ImportWizardState =
     }
   | {
       readonly kind: "error";
-      readonly step: "provider" | "book" | "destination" | "review";
+      readonly step: "provider" | "book" | "destination";
       readonly code: WizardErrorCode;
       readonly message: string;
       readonly canRetry: boolean;
@@ -87,8 +79,7 @@ export interface ImportWizardController {
   readonly search: (query: string) => void;
   readonly selectBook: (bookId: string) => Promise<void>;
   readonly updateDestination: (folder: string, filename: string) => void;
-  readonly review: () => void;
-  readonly confirm: () => Promise<void>;
+  readonly import: () => Promise<void>;
   readonly back: () => void;
   readonly retry: () => Promise<void>;
   readonly retryOpen: () => Promise<void>;
@@ -119,8 +110,6 @@ const errorMessage = (category: WizardErrorCode): string => {
       return "Choose a vault folder and valid filename.";
     case "settings-unavailable":
       return "Import settings could not be loaded. Retry or cancel.";
-    case "confirmation-required":
-      return "Review the import and confirm it before writing.";
     case "invalid-snapshot":
       return "The selected book changed. Go back and prepare the import again.";
     case "cancelled":
@@ -366,22 +355,30 @@ export const createImportWizardController = (dependencies: ImportWizardDependenc
     setState(bookState());
   };
 
-  const confirm = async (): Promise<void> => {
-    if (state.kind !== "review" || selectedProviderId === undefined || selectedBook === undefined) return;
+  const startImport = async (): Promise<void> => {
+    if (state.kind !== "destination" || selectedProviderId === undefined || selectedBook === undefined || destination === undefined) return;
     const book = selectedBook;
+    const destinationStateAtStart = state;
+    const filename = sanitizeEditedFilename(destination.filename);
+    destination = { folder: destination.folder, filename };
+    const path = createDestination(destination.folder, filename);
+    if (!path.ok) {
+      showError("unsafe-destination", "destination", false, destinationState() ?? destinationStateAtStart);
+      return;
+    }
+    const validatedDestination = destinationState() ?? destinationStateAtStart;
     const provider = dependencies.registry.get(selectedProviderId);
     if (provider === undefined) {
-      showError("provider-not-registered", "review", false, state);
+      showError("provider-not-registered", "destination", false, validatedDestination);
       return;
     }
 
-    const reviewState = state;
     const requestGeneration = invalidate();
     setState({
       kind: "importing",
       providerId: selectedProviderId,
       bookId: book.bookId,
-      path: reviewState.path,
+      path: path.value,
     });
 
     let result: Awaited<ReturnType<typeof dependencies.imports.execute>>;
@@ -389,16 +386,15 @@ export const createImportWizardController = (dependencies: ImportWizardDependenc
       result = await dependencies.imports.execute({
         provider,
         book,
-        path: reviewState.path,
-        confirmed: true,
+        path: path.value,
         isActive: () => current(requestGeneration, provider.id, book.bookId),
         ...(preparedSnapshot === undefined ? {} : { snapshot: preparedSnapshot }),
       });
     } catch {
       if (current(requestGeneration, provider.id, book.bookId)) {
-        showError("unexpected", "review", true, reviewState, async () => {
-          setState(reviewState);
-          await confirm();
+        showError("unexpected", "destination", true, validatedDestination, async () => {
+          setState(validatedDestination);
+          await startImport();
         });
       }
       return;
@@ -406,15 +402,15 @@ export const createImportWizardController = (dependencies: ImportWizardDependenc
     if (!current(requestGeneration, provider.id, book.bookId)) return;
     if (!result.ok) {
       if (result.error.category === "destination-conflict") {
-        showError("destination-conflict", "destination", false, destinationState() ?? reviewState);
+        showError("destination-conflict", "destination", false, validatedDestination);
         return;
       }
       const retryable = result.error.category === "authentication" ||
         result.error.category === "provider-unavailable" ||
         result.error.category === "incomplete-data";
-      showError(result.error.category, "review", retryable, reviewState, retryable ? async (): Promise<void> => {
-        setState(reviewState);
-        await confirm();
+      showError(result.error.category, "destination", retryable, validatedDestination, retryable ? async (): Promise<void> => {
+        setState(validatedDestination);
+        await startImport();
       } : undefined);
       return;
     }
@@ -459,31 +455,7 @@ export const createImportWizardController = (dependencies: ImportWizardDependenc
       const next = destinationState();
       if (next !== undefined) setState(next);
     },
-    review: (): void => {
-      if (state.kind !== "destination" || destination === undefined || selectedBook === undefined) return;
-      const filename = sanitizeEditedFilename(destination.filename);
-      destination = { folder: destination.folder, filename };
-      const path = createDestination(destination.folder, filename);
-      if (!path.ok) {
-        showError("unsafe-destination", "destination", false, destinationState() ?? state);
-        return;
-      }
-      const provider = dependencies.registry.get(state.providerId);
-      if (provider === undefined) {
-        showError("provider-not-registered", "provider", false, providerState());
-        return;
-      }
-      const nextReview: Extract<ImportWizardState, { kind: "review" }> = {
-        kind: "review",
-        providerId: provider.id,
-        providerName: provider.displayName,
-        book: selectedBook,
-        path: path.value,
-        annotationCount: preparedSnapshot?.annotations.length,
-      };
-      setState(nextReview);
-    },
-    confirm,
+    import: startImport,
     back: (): void => {
       if (state.kind === "importing" || state.kind === "complete" || state.kind === "cancelled") return;
       invalidate();
@@ -499,11 +471,6 @@ export const createImportWizardController = (dependencies: ImportWizardDependenc
       }
       if (state.kind === "destination") {
         setState(bookState());
-        return;
-      }
-      if (state.kind === "review") {
-        const previous = destinationState();
-        if (previous !== undefined) setState(previous);
         return;
       }
       setState(state.operation === "library" ? providerState() : bookState());

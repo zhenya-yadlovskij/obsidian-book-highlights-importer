@@ -79,7 +79,7 @@ export class ImportBookHighlightsModal extends Modal {
     this.renderedKind = state.kind;
     this.bookResultsEl = undefined;
     this.contentEl.empty();
-    this.contentEl.createEl("p", { text: "Provider > Book > Destination > Review" });
+    this.contentEl.createEl("p", { text: "Provider > Book > Destination" });
 
     switch (state.kind) {
       case "provider":
@@ -93,9 +93,6 @@ export class ImportBookHighlightsModal extends Modal {
         return;
       case "destination":
         this.renderDestination(state);
-        return;
-      case "review":
-        this.renderReview(state);
         return;
       case "importing":
         this.contentEl.createEl("p", { text: "Importing..." });
@@ -192,7 +189,7 @@ export class ImportBookHighlightsModal extends Modal {
       }));
     new Setting(this.contentEl)
       .setName("Filename")
-      .setDesc("Invalid filename characters are replaced before review.")
+      .setDesc("Invalid filename characters are replaced before import.")
       .addText((text) => text.setValue(filename).onChange((value) => {
         filename = value;
         this.controller.updateDestination(folder, filename);
@@ -204,27 +201,9 @@ export class ImportBookHighlightsModal extends Modal {
       .addButton((button) => button.setButtonText("Back").onClick(() => {
         this.controller.back();
       }))
-      .addButton((button) => button.setButtonText("Review").setCta().onClick(() => {
-        this.controller.review();
+      .addButton((button) => button.setButtonText("Import").setCta().onClick(async () => {
+        await this.controller.import();
       }))
-      .addButton((button) => button.setButtonText("Cancel").onClick(() => {
-        this.controller.cancel();
-      }));
-  }
-
-  private renderReview(state: Extract<ImportWizardState, { kind: "review" }>): void {
-    this.contentEl.createEl("h2", { text: "Review import" });
-    new Setting(this.contentEl).setName("Provider").setDesc(state.providerName);
-    new Setting(this.contentEl).setName("Book").setDesc(state.book.title);
-    new Setting(this.contentEl).setName("Destination").setDesc(state.path);
-    new Setting(this.contentEl).setName("Annotations").setDesc(
-      state.annotationCount === undefined ? "Fetched after confirmation" : String(state.annotationCount),
-    );
-    new Setting(this.contentEl)
-      .addButton((button) => button.setButtonText("Back").onClick(() => {
-        this.controller.back();
-      }))
-      .addButton((button) => button.setButtonText("Import").setCta().onClick(async () => this.controller.confirm()))
       .addButton((button) => button.setButtonText("Cancel").onClick(() => {
         this.controller.cancel();
       }));

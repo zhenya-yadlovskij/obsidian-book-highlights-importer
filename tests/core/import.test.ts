@@ -96,7 +96,7 @@ describe("import use case", () => {
     expect(deferredProvider.fetchAnnotations).not.toHaveBeenCalled();
   });
 
-  it("does not write before confirmation and fetches deferred annotations after confirmation", async () => {
+  it("executes directly and fetches deferred annotations before writing", async () => {
     const provider = makeProvider("deferred");
     const notes = { inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })), create: vi.fn(), process: vi.fn(), open: vi.fn() };
     const useCase = createImportUseCase({
@@ -106,18 +106,13 @@ describe("import use case", () => {
       render: vi.fn(() => "note"),
     });
 
-    const notConfirmed = await useCase.execute({ provider, book: selectedBook, path: "Books/Title.md", confirmed: false });
-    expect(notConfirmed).toEqual({ ok: false, error: { category: "confirmation-required" } });
-    expect(provider.fetchAnnotations).not.toHaveBeenCalled();
-    expect(notes.inspect).not.toHaveBeenCalled();
-
-    const confirmed = await useCase.execute({ provider, book: selectedBook, path: "Books/Title.md", confirmed: true });
-    expect(confirmed).toMatchObject({ ok: true, value: { annotationCount: 1 } });
+    const result = await useCase.execute({ provider, book: selectedBook, path: "Books/Title.md" });
+    expect(result).toMatchObject({ ok: true, value: { annotationCount: 1 } });
     expect(provider.fetchAnnotations).toHaveBeenCalledOnce();
     expect(notes.create).toHaveBeenCalledOnce();
   });
 
-  it("stops a deferred confirmed import before commit when its activity guard becomes inactive", async () => {
+  it("stops a deferred import before commit when its activity guard becomes inactive", async () => {
     const pending = deferred<ProviderResult<readonly BookAnnotation[]>>();
     const provider: ReadingProviderPort = {
       ...makeProvider("deferred"),
@@ -143,7 +138,6 @@ describe("import use case", () => {
       provider,
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       isActive: () => active,
     });
     await vi.waitFor(() => {
@@ -175,7 +169,6 @@ describe("import use case", () => {
       provider,
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: { book: selectedBook, annotations: [] },
     });
 
@@ -201,7 +194,6 @@ describe("import use case", () => {
       provider: makeProvider("early"),
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: { book: selectedBook, annotations: [createBookAnnotation({ text: "A", inputIndex: 0 })] },
     });
 
@@ -225,7 +217,6 @@ describe("import use case", () => {
       provider: makeProvider("early"),
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: { book: selectedBook, annotations: [createBookAnnotation({ text: "A", inputIndex: 0 })] },
     });
 
@@ -247,7 +238,6 @@ describe("import use case", () => {
       provider: makeProvider("early"),
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: { book: selectedBook, annotations: [createBookAnnotation({ text: "A", inputIndex: 0 })] },
     });
 
@@ -270,7 +260,6 @@ describe("import use case", () => {
       provider: makeProvider("early"),
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: { book: selectedBook, annotations: [createBookAnnotation({ text: "A", inputIndex: 0 })] },
     });
 
@@ -292,7 +281,6 @@ describe("import use case", () => {
       provider: makeProvider("early"),
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: { book: selectedBook, annotations: [createBookAnnotation({ text: "A", inputIndex: 0 })] },
     });
 
@@ -320,7 +308,6 @@ describe("import use case", () => {
       provider: makeProvider("early"),
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: { book: mismatchedBook, annotations: [createBookAnnotation({ text: "A", inputIndex: 0 })] },
     });
 
@@ -353,7 +340,6 @@ describe("import use case", () => {
       provider: makeProvider("early"),
       book: selectedBook,
       path: "Books/Stale.md",
-      confirmed: true,
       snapshot: { book: staleBook, annotations: [createBookAnnotation({ text: "A", inputIndex: 0 })] },
     });
     expect(stale).toEqual({ ok: false, error: { category: "invalid-snapshot" } });
@@ -362,7 +348,6 @@ describe("import use case", () => {
       provider: makeProvider("early"),
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: {
         book: selectedBook,
         annotations: [
@@ -389,7 +374,6 @@ describe("import use case", () => {
       provider: makeProvider("early"),
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: { book: selectedBook, annotations: [createBookAnnotation({ text: "A", inputIndex: 0 })] },
     });
 
@@ -423,7 +407,6 @@ describe("import use case", () => {
       provider,
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: { book: selectedBook, annotations: [createBookAnnotation({ text: "A", inputIndex: 0 })] },
     });
 

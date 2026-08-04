@@ -187,7 +187,6 @@ describe("composed import workflow integration", () => {
       provider,
       book: selectedBook,
       path,
-      confirmed: true,
       snapshot: snapshot(selectedBook, [annotation("Stale highlight", 0), annotation("Also stale", 1)]),
     });
     expect(first).toMatchObject({ ok: true, value: { annotationCount: 2 } });
@@ -210,7 +209,6 @@ describe("composed import workflow integration", () => {
       provider,
       book: selectedBook,
       path,
-      confirmed: true,
       snapshot: snapshot(selectedBook, [annotation("Fresh highlight", 0)]),
     });
 
@@ -242,7 +240,6 @@ describe("composed import workflow integration", () => {
       provider,
       book: otherBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: snapshot(otherBook, [annotation("Other highlight", 0)]),
     });
     const before = notes.content();
@@ -252,7 +249,6 @@ describe("composed import workflow integration", () => {
       provider,
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: snapshot(selectedBook, [annotation("Must not be written", 0)]),
     });
 
@@ -272,7 +268,6 @@ describe("composed import workflow integration", () => {
       provider,
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: snapshot(selectedBook, [annotation("Must not be written", 0)]),
     });
 
@@ -289,7 +284,6 @@ describe("composed import workflow integration", () => {
       provider,
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: snapshot(selectedBook, [annotation("Initial", 0)]),
     });
     const valid = notes.content();
@@ -305,7 +299,6 @@ describe("composed import workflow integration", () => {
       provider,
       book: selectedBook,
       path: "Books/Title.md",
-      confirmed: true,
       snapshot: snapshot(selectedBook, [annotation("Must not be written", 0)]),
     });
 

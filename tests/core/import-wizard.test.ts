@@ -335,7 +335,7 @@ describe("import wizard controller", () => {
     expect(controller.getState()).toMatchObject({ kind: "book", selectedBookId: "dune" });
   });
 
-  it("uses destination settings, sanitizes edits, and requires review confirmation", async () => {
+  it("uses destination settings, sanitizes edits, and imports directly", async () => {
     const selectedBook = book("first", "dune");
     const execute = vi.fn<ImportUseCase["execute"]>(() => Promise.resolve({
       ok: true as const,
@@ -356,24 +356,58 @@ describe("import wizard controller", () => {
       filename: "Frank Herbert - Dune.md",
     });
     controller.updateDestination("Archive", "Dune: Part / One");
-    controller.review();
-    expect(controller.getState()).toMatchObject({
-      kind: "review",
-      path: "Archive/Dune - Part - One.md",
-      annotationCount: 2,
-    });
-    expect(execute).not.toHaveBeenCalled();
-
-    await controller.confirm();
+    const importing = controller.import();
+    expect(controller.getState()).toMatchObject({ kind: "importing", path: "Archive/Dune - Part - One.md" });
+    await importing;
     const request = execute.mock.calls[0]?.[0];
     expect(request?.provider.id).toBe("first");
     expect(request?.book.bookId).toBe("dune");
     expect(request?.path).toBe("Archive/Dune - Part - One.md");
-    expect(request?.confirmed).toBe(true);
     expect(request?.snapshot?.annotations).toHaveLength(2);
   });
 
-  it("does not fetch deferred annotations until explicit review confirmation", async () => {
+  it("blocks an invalid destination before starting the import", async () => {
+    const selectedBook = book("first", "dune");
+    const execute = vi.fn<ImportUseCase["execute"]>();
+    const { controller } = makeController({
+      loadLibrary: vi.fn(() => loaded([selectedBook])),
+      prepareSnapshot: vi.fn(() => prepared(snapshot(selectedBook))),
+      execute,
+    });
+    await controller.selectProvider("first");
+    await controller.selectBook("dune");
+
+    controller.updateDestination("../Unsafe", "Dune.md");
+    await controller.import();
+
+    expect(controller.getState()).toMatchObject({ kind: "error", code: "unsafe-destination" });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("retains the sanitized destination when a direct import fails and is retried", async () => {
+    const selectedBook = book("first", "dune");
+    const execute = vi.fn<ImportUseCase["execute"]>()
+      .mockResolvedValueOnce({ ok: false, error: { category: "provider-unavailable", providerId: "first" } })
+      .mockResolvedValueOnce({ ok: true, value: { path: "Books/Dune - Notes.md", annotationCount: 1, warnings: [] } });
+    const { controller } = makeController({
+      loadLibrary: vi.fn(() => loaded([selectedBook])),
+      prepareSnapshot: vi.fn(() => prepared(snapshot(selectedBook))),
+      execute,
+    });
+    await controller.selectProvider("first");
+    await controller.selectBook("dune");
+
+    controller.updateDestination("Books", "Dune: Notes");
+    await controller.import();
+    expect(controller.getState()).toMatchObject({ kind: "error", canRetry: true });
+
+    controller.back();
+    expect(controller.getState()).toMatchObject({ kind: "destination", filename: "Dune - Notes.md" });
+    await controller.import();
+    expect(controller.getState()).toMatchObject({ kind: "complete" });
+  });
+
+  it("fetches deferred annotations only after the destination import action", async () => {
     const selectedBook = book("first", "dune");
     const deferredProvider = provider("first", "deferred");
     const prepareSnapshot = vi.fn(() => Promise.resolve({ ok: true as const, value: undefined }));
@@ -390,11 +424,9 @@ describe("import wizard controller", () => {
 
     await controller.selectProvider("first");
     await controller.selectBook("dune");
-    controller.review();
-
-    expect(controller.getState()).toMatchObject({ kind: "review", annotationCount: undefined });
-    expect(execute).not.toHaveBeenCalled();
-    await controller.confirm();
+    const importing = controller.import();
+    expect(controller.getState()).toMatchObject({ kind: "importing" });
+    await importing;
     expect(execute).toHaveBeenCalledOnce();
     expect(controller.getState()).toMatchObject({ kind: "complete", annotationCount: 3 });
   });
@@ -443,9 +475,7 @@ describe("import wizard controller", () => {
     });
     await controller.selectProvider("first");
     await controller.selectBook("dune");
-    controller.review();
-
-    await controller.confirm();
+    await controller.import();
     expect(controller.getState()).toMatchObject({
       kind: "error",
       code: "destination-conflict",
@@ -456,8 +486,7 @@ describe("import wizard controller", () => {
 
     controller.back();
     expect(controller.getState()).toMatchObject({ kind: "destination" });
-    controller.review();
-    await controller.confirm();
+    await controller.import();
     expect(controller.getState()).toMatchObject({
       kind: "complete",
       annotationCount: 2,
@@ -490,8 +519,7 @@ describe("import wizard controller", () => {
     });
     await controller.selectProvider("first");
     await controller.selectBook("dune");
-    controller.review();
-    await controller.confirm();
+    await controller.import();
 
     expect(controller.getState()).toMatchObject({
       kind: "complete",
@@ -533,9 +561,7 @@ describe("import wizard controller", () => {
     });
     await controller.selectProvider("first");
     await controller.selectBook("dune");
-    controller.review();
-
-    const importing = controller.confirm();
+    const importing = controller.import();
     expect(controller.getState()).toMatchObject({ kind: "importing" });
     controller.cancel();
     await controller.selectProvider("first");
