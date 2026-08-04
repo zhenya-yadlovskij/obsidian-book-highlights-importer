@@ -29,18 +29,11 @@ interface CapturedImportModal {
   closeForUnload(): void;
 }
 
-interface CapturedRuntimeModal {
-  closed: boolean;
-  closeCalls: number;
-  credential: string;
-}
-
 const host = vi.hoisted(() => ({
   registeredCommands: [] as RegisteredCommand[],
   addedSettingsTabs: [] as unknown[],
   constructedImportModals: [] as unknown[],
   openedImportModals: [] as unknown[],
-  openedRuntimeModals: [] as unknown[],
   clientFactoryCalls: [] as { credential: string; transport: unknown }[],
   requestUrl: vi.fn(),
   loadData: vi.fn<() => Promise<unknown>>(),
@@ -71,30 +64,6 @@ vi.mock("obsidian", () => ({
     saveData(data: unknown): Promise<void> {
       return host.saveData(data);
     }
-  },
-  Modal: class Modal {
-    closed = false;
-    closeCalls = 0;
-    readonly contentEl = { empty: vi.fn() };
-
-    constructor(readonly app: App) {}
-
-    open(): void {
-      host.openedRuntimeModals.push(this);
-    }
-
-    close(): void {
-      if (this.closed) return;
-      this.closed = true;
-      this.closeCalls += 1;
-      (this as { onClose?: () => void }).onClose?.();
-    }
-  },
-  Notice: class Notice {
-    constructor(readonly message: string) {}
-  },
-  Setting: class Setting {
-    constructor(readonly container: HTMLElement) {}
   },
   requestUrl: host.requestUrl,
 }));
@@ -178,12 +147,6 @@ const importModal = (): CapturedImportModal => {
   return modal as CapturedImportModal;
 };
 
-const runtimeModal = (): CapturedRuntimeModal => {
-  const modal = host.openedRuntimeModals[0];
-  if (modal === undefined) throw new Error("Missing runtime modal");
-  return modal as CapturedRuntimeModal;
-};
-
 const createPlugin = (): {
   readonly plugin: BookHighlightsImporterPlugin;
   readonly getSecret: ReturnType<typeof vi.fn>;
@@ -224,7 +187,6 @@ describe("BookHighlightsImporterPlugin lifecycle", () => {
     host.addedSettingsTabs.length = 0;
     host.constructedImportModals.length = 0;
     host.openedImportModals.length = 0;
-    host.openedRuntimeModals.length = 0;
     host.clientFactoryCalls.length = 0;
     host.requestUrl.mockReset();
     host.loadData.mockReset().mockResolvedValue({ version: 1, defaultFolder: "Books" });
@@ -232,13 +194,12 @@ describe("BookHighlightsImporterPlugin lifecycle", () => {
     host.getProfile.mockReset().mockResolvedValue({ login: "reader" });
   });
 
-  it("registers both commands and one provider settings tab without eager host or provider calls", async () => {
+  it("registers the import command and one provider settings tab without eager host or provider calls", async () => {
     const fixture = createPlugin();
 
     await expect(fixture.plugin.onload()).resolves.toBeUndefined();
 
     expect(host.registeredCommands.map(({ id, name }) => ({ id, name }))).toEqual([
-      { id: "open-runtime-compatibility-harness", name: "Open runtime compatibility harness" },
       { id: "import-book-highlights", name: "Import Book Highlights" },
     ]);
     expect(host.addedSettingsTabs).toHaveLength(1);
@@ -284,38 +245,22 @@ describe("BookHighlightsImporterPlugin lifecycle", () => {
     expect(host.requestUrl).not.toHaveBeenCalled();
   });
 
-  it("keeps the runtime compatibility command and opens one compatibility modal", async () => {
-    const { plugin } = createPlugin();
-    await plugin.onload();
-
-    command("open-runtime-compatibility-harness").callback?.();
-
-    expect(host.openedRuntimeModals).toHaveLength(1);
-    expect(host.openedImportModals).toHaveLength(0);
-  });
-
   it("closes tracked modals on unload and does not retain modals users closed normally", async () => {
     const { plugin } = createPlugin();
     await plugin.onload();
 
-    command("open-runtime-compatibility-harness").callback?.();
     command("import-book-highlights").callback?.();
     command("import-book-highlights").callback?.();
     const firstImport = host.constructedImportModals[0] as CapturedImportModal | undefined;
     const secondImport = host.constructedImportModals[1] as CapturedImportModal | undefined;
     if (firstImport === undefined || secondImport === undefined) throw new Error("Missing import modals");
-    const runtime = runtimeModal();
-    runtime.credential = "temporary-token";
     firstImport.close();
 
     plugin.onunload();
 
     expect(firstImport).toMatchObject({ closed: true, closeCalls: 1, forcedCloseCalls: 0 });
     expect(secondImport).toMatchObject({ closed: true, closeCalls: 1, forcedCloseCalls: 1 });
-    expect(runtime).toMatchObject({ closed: true, closeCalls: 1, credential: "" });
-
     plugin.onunload();
     expect(secondImport).toMatchObject({ closeCalls: 1, forcedCloseCalls: 1 });
-    expect(runtime.closeCalls).toBe(1);
   });
 });

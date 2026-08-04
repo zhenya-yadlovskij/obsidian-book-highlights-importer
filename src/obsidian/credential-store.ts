@@ -1,5 +1,6 @@
-import { YANDEX_TOKEN_SECRET_ID } from "../compatibility/yandex-runtime";
 import type { CredentialStorePort } from "../core/ports";
+
+export const YANDEX_TOKEN_SECRET_ID = "book-highlights-importer-yandex-books-token";
 
 interface SecretStorageHost {
   readonly getSecret: (id: string) => string | null;

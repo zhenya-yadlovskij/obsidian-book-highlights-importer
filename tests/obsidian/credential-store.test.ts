@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { YANDEX_TOKEN_SECRET_ID } from "../../src/compatibility/yandex-runtime";
-import { createObsidianCredentialStore } from "../../src/obsidian/credential-store";
+import {
+  createObsidianCredentialStore,
+  YANDEX_TOKEN_SECRET_ID,
+} from "../../src/obsidian/credential-store";
 
 describe("Obsidian credential store", () => {
   it("reads a configured provider from its exact lowercase secret ID", () => {
