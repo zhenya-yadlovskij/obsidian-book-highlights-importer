@@ -88,6 +88,8 @@ describe("managed note service", () => {
       expect(updated).not.toContain("> Stale highlight");
       expect(updated.match(/book-highlights-importer:start/gu)).toHaveLength(1);
       expect(updated).toContain("tags: [keep]");
+      expect(updated).toContain('bh-title: "Title"');
+      expect(updated).toContain('book-highlights-title: "Old"');
     }
   });
 
@@ -124,7 +126,6 @@ describe("managed note service", () => {
       bookId: otherIdentity.bookId,
       title: "Other",
       authors: ["Author"],
-      status: "finished",
       importedAt: 1,
     })}${createManagedSection(otherIdentity, "# Other\n")}`;
     const notes = repository("managed", existing);
@@ -163,11 +164,10 @@ describe("managed note service", () => {
       bookId: book.bookId,
       title: book.title,
       authors: book.authors,
-      status: book.status,
       importedAt: 1,
     }).replace(
-      'book-highlights-book-id: "book-1"',
-      'book-highlights-book-id: "book-1"\nbook-highlights-book-id: "other-book"',
+      'bh-book-id: "book-1"',
+      'bh-book-id: "book-1"\nbh-book-id: "other-book"',
     );
     const existing = `${identity}${createManagedSection({ providerId: book.providerId, bookId: book.bookId }, "# Title\n")}`;
     const notes = repository("managed", existing);

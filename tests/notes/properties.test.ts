@@ -77,7 +77,6 @@ describe("managed note properties", () => {
         bookId: "book",
         title: "Old",
         authors: [],
-        status: "unknown",
         importedAt: 1,
       }), `user-value: ${JSON.stringify(text)}`) + "body\n";
       const merged = mergeFrontmatter(old, {
@@ -85,7 +84,6 @@ describe("managed note properties", () => {
         bookId: "book",
         title: "New",
         authors: [],
-        status: "finished",
         importedAt: 2,
       });
       expect(merged.ok).toBe(true);
@@ -107,7 +105,6 @@ describe("managed note properties", () => {
         bookId: "book",
         title: "Old",
         authors: [],
-        status: "unknown",
         importedAt: 1,
       }), `user-value: ${JSON.stringify(value)}`) + "body\n";
       const merged = mergeFrontmatter(old, {
@@ -115,13 +112,12 @@ describe("managed note properties", () => {
         bookId: "book",
         title: "New",
         authors: [],
-        status: "finished",
         importedAt: 2,
       });
       expect(merged.ok).toBe(true);
       if (merged.ok) {
         expect(merged.value).toContain(`user-value: ${JSON.stringify(value)}`);
-        expect(merged.value).toContain('book-highlights-title: "New"');
+        expect(merged.value).toContain('bh-title: "New"');
       }
     }
   });

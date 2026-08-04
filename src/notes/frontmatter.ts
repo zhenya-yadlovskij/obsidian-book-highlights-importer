@@ -1,4 +1,3 @@
-import type { ReadingStatus } from "../core/models";
 import { ok, type Result } from "../core/results";
 
 export interface ManagedFrontmatter {
@@ -6,8 +5,6 @@ export interface ManagedFrontmatter {
   readonly bookId: string;
   readonly title: string;
   readonly authors: readonly string[];
-  readonly status: ReadingStatus;
-  readonly sourceUrl?: string;
   readonly importedAt: number;
 }
 
@@ -16,26 +13,22 @@ export interface FrontmatterError {
 }
 
 const ownedKeys = new Set([
-  "book-highlights-provider",
-  "book-highlights-book-id",
-  "book-highlights-title",
-  "book-highlights-authors",
-  "book-highlights-status",
-  "book-highlights-source-url",
-  "book-highlights-imported-at",
+  "bh-provider",
+  "bh-book-id",
+  "bh-title",
+  "bh-authors",
+  "bh-imported-at",
 ]);
 
 const quote = (value: string): string => JSON.stringify(value);
 
 export const serializeFrontmatter = (metadata: ManagedFrontmatter): string => {
   const lines = [
-    `book-highlights-provider: ${quote(metadata.providerId)}`,
-    `book-highlights-book-id: ${quote(metadata.bookId)}`,
-    `book-highlights-title: ${quote(metadata.title)}`,
-    `book-highlights-authors: ${JSON.stringify([...metadata.authors])}`,
-    `book-highlights-status: ${quote(metadata.status)}`,
-    ...(metadata.sourceUrl === undefined ? [] : [`book-highlights-source-url: ${quote(metadata.sourceUrl)}`]),
-    `book-highlights-imported-at: ${String(metadata.importedAt)}`,
+    `bh-provider: ${quote(metadata.providerId)}`,
+    `bh-book-id: ${quote(metadata.bookId)}`,
+    `bh-title: ${quote(metadata.title)}`,
+    `bh-authors: ${JSON.stringify([...metadata.authors])}`,
+    `bh-imported-at: ${quote(new Date(metadata.importedAt).toISOString())}`,
   ];
   return `---\n${lines.join("\n")}\n---\n`;
 };
@@ -61,7 +54,10 @@ const parseValue = (value: string): string | undefined => {
   return trimmed === "" ? undefined : trimmed;
 };
 
-const parsedTopLevelValues = (content: string): ReadonlyMap<string, string> | undefined => {
+const parsedTopLevelValues = (content: string): {
+  readonly values: ReadonlyMap<string, string>;
+  readonly keys: ReadonlySet<string>;
+} | undefined => {
   const parsed = frontmatterLines(content);
   if (parsed === undefined) return undefined;
   const values = new Map<string, string>();
@@ -75,15 +71,36 @@ const parsedTopLevelValues = (content: string): ReadonlyMap<string, string> | un
     const value = parseValue(match[2]);
     if (value !== undefined) values.set(match[1], value);
   }
-  return values;
+  return { values, keys: seenKeys };
+};
+
+type IdentityPair = { readonly providerId: string; readonly bookId: string } | "absent" | "invalid";
+
+const identityPair = (
+  parsed: { readonly values: ReadonlyMap<string, string>; readonly keys: ReadonlySet<string> },
+  providerKey: string,
+  bookKey: string,
+): IdentityPair => {
+  const providerPresent = parsed.keys.has(providerKey);
+  const bookPresent = parsed.keys.has(bookKey);
+  if (!providerPresent && !bookPresent) return "absent";
+  if (!providerPresent || !bookPresent) return "invalid";
+  const providerId = parsed.values.get(providerKey);
+  const bookId = parsed.values.get(bookKey);
+  return providerId === undefined || bookId === undefined ? "invalid" : { providerId, bookId };
 };
 
 export const parseFrontmatterIdentity = (content: string): { readonly providerId: string; readonly bookId: string } | undefined => {
   const values = parsedTopLevelValues(content);
   if (values === undefined) return undefined;
-  const providerId = values.get("book-highlights-provider");
-  const bookId = values.get("book-highlights-book-id");
-  return providerId === undefined || bookId === undefined ? undefined : { providerId, bookId };
+  const current = identityPair(values, "bh-provider", "bh-book-id");
+  const legacy = identityPair(values, "book-highlights-provider", "book-highlights-book-id");
+  if (current === "invalid" || legacy === "invalid") return undefined;
+  if (current !== "absent") {
+    if (legacy !== "absent" && (legacy.providerId !== current.providerId || legacy.bookId !== current.bookId)) return undefined;
+    return current;
+  }
+  return legacy === "absent" ? undefined : legacy;
 };
 
 const ownedKey = (line: string): string | undefined => {

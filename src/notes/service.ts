@@ -82,8 +82,6 @@ export const createManagedNoteService = (dependencies: ManagedNoteDependencies):
       bookId: snapshot.book.bookId,
       title: snapshot.book.title,
       authors: snapshot.book.authors,
-      status: snapshot.book.status,
-      ...(snapshot.book.sourceUrl === undefined ? {} : { sourceUrl: snapshot.book.sourceUrl }),
       importedAt: dependencies.now?.() ?? Date.now(),
     };
     const section = createManagedSection(metadata, body);

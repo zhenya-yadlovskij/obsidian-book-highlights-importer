@@ -192,7 +192,7 @@ describe("composed import workflow integration", () => {
     expect(first).toMatchObject({ ok: true, value: { annotationCount: 2 } });
     const initial = notes.content();
     if (initial === undefined) throw new Error("Initial import did not create content");
-    expect(initial).toContain('book-highlights-provider: "provider"');
+    expect(initial).toContain('bh-provider: "provider"');
     expect(initial).toContain("book-highlights-importer:start version=1 provider=provider book-id=book-1");
     expect(initial).toContain("> Stale highlight");
     expect(initial).toContain("> Also stale");
