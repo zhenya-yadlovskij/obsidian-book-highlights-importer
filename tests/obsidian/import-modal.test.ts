@@ -436,16 +436,17 @@ describe("import modal", () => {
       fetchAnnotations: vi.fn(() => annotations.promise),
     };
     const load = vi.fn(() => Promise.resolve({ defaultFolder: "Books" }));
-    const save = vi.fn(() => Promise.resolve());
+    const update = vi.fn(() => Promise.resolve({ defaultFolder: "Books" }));
     const notes = {
       inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })),
+      ensureFolder: vi.fn(),
       create: vi.fn(() => Promise.resolve()),
       process: vi.fn(() => Promise.resolve()),
       open: vi.fn(() => Promise.resolve()),
     };
     const imports = createImportUseCase({
       credentials: { get: (): string => "configured" },
-      settings: { load, save },
+      settings: { load, update },
       notes,
     });
     const onClosed = vi.fn();
@@ -479,7 +480,7 @@ describe("import modal", () => {
     expect(notes.inspect).not.toHaveBeenCalled();
     expect(notes.create).not.toHaveBeenCalled();
     expect(notes.process).not.toHaveBeenCalled();
-    expect(save).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
     expect(load).toHaveBeenCalledTimes(settingsLoadsBeforeUnload);
     expect(notes.open).not.toHaveBeenCalled();
     expect((modal.contentEl as unknown as FakeElement).children).toEqual([]);

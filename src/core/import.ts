@@ -155,9 +155,10 @@ export const createImportUseCase = (dependencies: ImportDependencies): ImportUse
 
     const warnings: PostCommitWarning[] = [];
     try {
-      const settings = await dependencies.settings.load();
-      const updated: ImportSettings = { ...settings, lastFolder: folderFromPath(request.path) };
-      await dependencies.settings.save(updated);
+      await dependencies.settings.update((settings: ImportSettings) => ({
+        ...settings,
+        lastFolder: folderFromPath(request.path),
+      }));
     } catch {
       warnings.push({ category: "post-commit-warning", kind: "folder-persistence" });
     }

@@ -20,8 +20,11 @@ describe("core composition", () => {
     const registered = provider("registered");
     const composition = createCoreComposition([registered], {
       credentials: { get: () => "credential" },
-      settings: { load: () => Promise.resolve({ defaultFolder: "Books" }), save: () => Promise.resolve() },
-      notes: { inspect: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() },
+      settings: {
+        load: () => Promise.resolve({ defaultFolder: "Books" }),
+        update: (change) => Promise.resolve(change({ defaultFolder: "Books" })),
+      },
+      notes: { inspect: vi.fn(), ensureFolder: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() },
     });
 
     expect(composition.registry.get("registered")).toBe(registered);

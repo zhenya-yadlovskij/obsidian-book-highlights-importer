@@ -28,7 +28,41 @@ const saveSettings = (settings: ImportSettings): PluginSettingsV1 =>
     ? { version: 1, defaultFolder: settings.defaultFolder }
     : { version: 1, defaultFolder: settings.defaultFolder, lastFolder: settings.lastFolder };
 
-export const createObsidianSettingsRepository = (host: PluginDataHost): SettingsRepositoryPort => ({
-  load: async () => loadSettings(await host.loadData()),
-  save: async (settings) => host.saveData(saveSettings(settings)),
-});
+export const createObsidianSettingsRepository = (host: PluginDataHost): SettingsRepositoryPort => {
+  let updateQueue: Promise<void> = Promise.resolve();
+  let cachedSettings: ImportSettings | undefined;
+  let pendingLoad: Promise<ImportSettings> | undefined;
+
+  const readSettings = (): Promise<ImportSettings> => {
+    if (cachedSettings !== undefined) return Promise.resolve(cachedSettings);
+    if (pendingLoad !== undefined) return pendingLoad;
+    pendingLoad ??= host.loadData()
+      .then((stored) => {
+        cachedSettings ??= loadSettings(stored);
+        return cachedSettings;
+      })
+      .finally(() => {
+        pendingLoad = undefined;
+      });
+    return pendingLoad;
+  };
+
+  const update = (change: (current: ImportSettings) => ImportSettings): Promise<ImportSettings> => {
+    const operation = updateQueue.then(async () => {
+      const current = await readSettings();
+      const updated = change(current);
+      await host.saveData(saveSettings(updated));
+      cachedSettings = updated;
+      return updated;
+    });
+    updateQueue = operation.then(() => undefined, () => undefined);
+    return operation;
+  };
+
+  return {
+    load: async (): Promise<ImportSettings> => {
+      return readSettings();
+    },
+    update,
+  };
+};

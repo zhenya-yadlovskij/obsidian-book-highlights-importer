@@ -106,6 +106,8 @@ const errorMessage = (category: WizardErrorCode): string => {
       return "This book has no importable annotations.";
     case "destination-conflict":
       return "This destination cannot be updated safely. Choose a different filename.";
+    case "destination-unavailable":
+      return "The destination folder could not be prepared. Retry the import or choose another folder.";
     case "unsafe-destination":
       return "Choose a vault folder and valid filename.";
     case "settings-unavailable":
@@ -407,7 +409,8 @@ export const createImportWizardController = (dependencies: ImportWizardDependenc
       }
       const retryable = result.error.category === "authentication" ||
         result.error.category === "provider-unavailable" ||
-        result.error.category === "incomplete-data";
+        result.error.category === "incomplete-data" ||
+        result.error.category === "destination-unavailable";
       showError(result.error.category, "destination", retryable, validatedDestination, retryable ? async (): Promise<void> => {
         setState(validatedDestination);
         await startImport();

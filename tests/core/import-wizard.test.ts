@@ -497,6 +497,36 @@ describe("import wizard controller", () => {
     });
   });
 
+  it("retries when the destination folder cannot be prepared", async () => {
+    const selectedBook = book("first", "dune");
+    const execute = vi.fn()
+      .mockResolvedValueOnce({ ok: false, error: { category: "destination-unavailable" as const } })
+      .mockResolvedValueOnce({
+        ok: true as const,
+        value: { path: "Books/Dune.md", annotationCount: 1, warnings: [] },
+      });
+    const { controller } = makeController({
+      loadLibrary: vi.fn(() => loaded([selectedBook])),
+      prepareSnapshot: vi.fn(() => prepared(snapshot(selectedBook))),
+      execute,
+    });
+
+    await controller.selectProvider("first");
+    await controller.selectBook("dune");
+    await controller.import();
+
+    expect(controller.getState()).toMatchObject({
+      kind: "error",
+      code: "destination-unavailable",
+      message: "The destination folder could not be prepared. Retry the import or choose another folder.",
+      canRetry: true,
+    });
+
+    await controller.retry();
+    expect(execute).toHaveBeenCalledTimes(2);
+    expect(controller.getState()).toMatchObject({ kind: "complete", path: "Books/Dune.md" });
+  });
+
   it("retries only opening the committed note and retains completion when reopening fails", async () => {
     const secret = "credential-that-must-not-appear";
     const selectedBook = book("first", "dune");

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createImportUseCase } from "../../src/core/import";
 import { createBookAnnotation, createProviderBook } from "../../src/core/models";
 import type { BookAnnotation, ProviderBook } from "../../src/core/models";
-import type { ProviderResult, ReadingProviderPort, SettingsRepositoryPort } from "../../src/core/ports";
+import type { ImportSettings, ProviderResult, ReadingProviderPort, SettingsRepositoryPort } from "../../src/core/ports";
 
 const selectedBook = createProviderBook({
   providerId: "provider",
@@ -26,7 +26,7 @@ const makeProvider = (annotationFetch: "early" | "deferred"): ReadingProviderPor
 
 const settings: SettingsRepositoryPort = {
   load: vi.fn(() => Promise.resolve({ defaultFolder: "Books" })),
-  save: vi.fn(() => Promise.resolve()),
+  update: vi.fn((change: (current: ImportSettings) => ImportSettings) => Promise.resolve(change({ defaultFolder: "Books" }))),
 };
 
 interface Deferred<T> {
@@ -48,7 +48,7 @@ describe("import use case", () => {
     const result = await createImportUseCase({
       credentials: { get: vi.fn(() => null) },
       settings,
-      notes: { inspect: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() },
+       notes: { inspect: vi.fn(), ensureFolder: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() },
     }).loadLibrary(provider);
 
     expect(result).toEqual({ ok: false, error: { category: "missing-credential", providerId: "provider" } });
@@ -61,7 +61,7 @@ describe("import use case", () => {
     const useCase = createImportUseCase({
       credentials: { get },
       settings,
-      notes: { inspect: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() },
+       notes: { inspect: vi.fn(), ensureFolder: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() },
     });
 
     await useCase.loadLibrary(provider);
@@ -77,7 +77,7 @@ describe("import use case", () => {
     const earlyUseCase = createImportUseCase({
       credentials: { get: vi.fn(() => "credential") },
       settings,
-      notes: { inspect: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() },
+       notes: { inspect: vi.fn(), ensureFolder: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() },
     });
     const early = await earlyUseCase.prepareSnapshot(earlyProvider, selectedBook);
 
@@ -88,7 +88,7 @@ describe("import use case", () => {
     const deferredUseCase = createImportUseCase({
       credentials: { get: vi.fn(() => "credential") },
       settings,
-      notes: { inspect: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() },
+       notes: { inspect: vi.fn(), ensureFolder: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() },
     });
     const deferred = await deferredUseCase.prepareSnapshot(deferredProvider, selectedBook);
 
@@ -98,7 +98,7 @@ describe("import use case", () => {
 
   it("executes directly and fetches deferred annotations before writing", async () => {
     const provider = makeProvider("deferred");
-    const notes = { inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })), create: vi.fn(), process: vi.fn(), open: vi.fn() };
+    const notes = { inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })), ensureFolder: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() };
     const useCase = createImportUseCase({
       credentials: { get: vi.fn(() => "credential") },
       settings,
@@ -120,16 +120,17 @@ describe("import use case", () => {
     };
     const notes = {
       inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })),
+      ensureFolder: vi.fn(),
       create: vi.fn(() => Promise.resolve()),
       process: vi.fn(() => Promise.resolve()),
       open: vi.fn(() => Promise.resolve()),
     };
     const load = vi.fn(() => Promise.resolve({ defaultFolder: "Books" }));
-    const save = vi.fn(() => Promise.resolve());
+    const update = vi.fn(() => Promise.resolve({ defaultFolder: "Books" }));
     let active = true;
     const useCase = createImportUseCase({
       credentials: { get: vi.fn(() => "credential") },
-      settings: { load, save },
+      settings: { load, update },
       notes,
       render: vi.fn(() => "note"),
     });
@@ -152,12 +153,12 @@ describe("import use case", () => {
     expect(notes.process).not.toHaveBeenCalled();
     expect(notes.open).not.toHaveBeenCalled();
     expect(load).not.toHaveBeenCalled();
-    expect(save).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("does not write an empty snapshot", async () => {
     const provider = makeProvider("early");
-    const notes = { inspect: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() };
+    const notes = { inspect: vi.fn(), ensureFolder: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() };
     const useCase = createImportUseCase({
       credentials: { get: vi.fn(() => "credential") },
       settings,
@@ -180,6 +181,7 @@ describe("import use case", () => {
   it("uses the fixed renderer when no custom renderer is supplied", async () => {
     const notes = {
       inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })),
+      ensureFolder: vi.fn(),
       create: vi.fn(() => Promise.resolve()),
       process: vi.fn(),
       open: vi.fn(() => Promise.resolve()),
@@ -203,7 +205,7 @@ describe("import use case", () => {
   });
 
   it("does not write when the renderer fails", async () => {
-    const notes = { inspect: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() };
+    const notes = { inspect: vi.fn(), ensureFolder: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() };
     const useCase = createImportUseCase({
       credentials: { get: vi.fn(() => "credential") },
       settings,
@@ -226,7 +228,7 @@ describe("import use case", () => {
   });
 
   it("does not write when rendering produces empty content", async () => {
-    const notes = { inspect: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() };
+    const notes = { inspect: vi.fn(), ensureFolder: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() };
     const useCase = createImportUseCase({
       credentials: { get: vi.fn(() => "credential") },
       settings,
@@ -252,7 +254,7 @@ describe("import use case", () => {
     const useCase = createImportUseCase({
       credentials: { get },
       settings,
-      notes: { inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })), create, process: vi.fn(), open: vi.fn() },
+      notes: { inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })), ensureFolder: vi.fn(), create, process: vi.fn(), open: vi.fn() },
       render: vi.fn(() => "note"),
     });
 
@@ -269,7 +271,7 @@ describe("import use case", () => {
   });
 
   it("stops when the credential was cleared before a supplied early snapshot executes", async () => {
-    const notes = { inspect: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() };
+    const notes = { inspect: vi.fn(), ensureFolder: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() };
     const useCase = createImportUseCase({
       credentials: { get: vi.fn(() => null) },
       settings,
@@ -289,7 +291,7 @@ describe("import use case", () => {
   });
 
   it("validates supplied snapshot identity, state, and filtering before writing", async () => {
-    const notes = { inspect: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() };
+    const notes = { inspect: vi.fn(), ensureFolder: vi.fn(), create: vi.fn(), process: vi.fn(), open: vi.fn() };
     const useCase = createImportUseCase({
       credentials: { get: vi.fn(() => "credential") },
       settings,
@@ -318,6 +320,7 @@ describe("import use case", () => {
   it("rejects stale supplied book state and filters empty annotations", async () => {
     const notes = {
       inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })),
+      ensureFolder: vi.fn(),
       create: vi.fn(() => Promise.resolve()),
       process: vi.fn(),
       open: vi.fn(),
@@ -361,12 +364,12 @@ describe("import use case", () => {
 
   it("reports both post-commit warnings without rolling back the write", async () => {
     const create = vi.fn(() => Promise.resolve());
-    const save = vi.fn(() => Promise.reject(new Error("settings")));
+    const update = vi.fn(() => Promise.reject(new Error("settings")));
     const open = vi.fn(() => Promise.reject(new Error("workspace")));
     const useCase = createImportUseCase({
       credentials: { get: vi.fn(() => "credential") },
-      settings: { load: () => Promise.resolve({ defaultFolder: "Books" }), save },
-      notes: { inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })), create, process: vi.fn(), open },
+      settings: { load: () => Promise.resolve({ defaultFolder: "Books" }), update },
+      notes: { inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })), ensureFolder: vi.fn(), create, process: vi.fn(), open },
       render: vi.fn(() => "note"),
     });
 
@@ -394,12 +397,12 @@ describe("import use case", () => {
   it("persists the last folder only after a committed note write", async () => {
     const provider = makeProvider("early");
     const create = vi.fn(() => Promise.resolve());
-    const save = vi.fn(() => Promise.resolve());
+    const update = vi.fn(() => Promise.resolve({ defaultFolder: "Books", lastFolder: "Books" }));
     const open = vi.fn(() => Promise.resolve());
     const useCase = createImportUseCase({
       credentials: { get: vi.fn(() => "credential") },
-      settings: { load: settings.load, save },
-      notes: { inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })), create, process: vi.fn(), open },
+      settings: { load: settings.load, update },
+      notes: { inspect: vi.fn(() => Promise.resolve({ kind: "missing" as const })), ensureFolder: vi.fn(), create, process: vi.fn(), open },
       render: vi.fn(() => "note"),
     });
 
@@ -411,8 +414,8 @@ describe("import use case", () => {
     });
 
     expect(result).toMatchObject({ ok: true });
-    expect(create).toHaveBeenCalledBefore(save);
-    expect(save).toHaveBeenCalledWith({ defaultFolder: "Books", lastFolder: "Books" });
+    expect(create).toHaveBeenCalledBefore(update);
+    expect(update).toHaveBeenCalledWith(expect.any(Function));
     expect(open).toHaveBeenCalledWith("Books/Title.md");
   });
 });

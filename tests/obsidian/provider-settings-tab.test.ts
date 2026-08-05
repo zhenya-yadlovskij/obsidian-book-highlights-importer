@@ -25,9 +25,10 @@ interface FakeSetting {
   readonly buttons: FakeButton[];
 }
 
-const { notices, renderedSettings } = vi.hoisted(() => ({
+const { notices, renderedSettings, suggestionSelections } = vi.hoisted(() => ({
   notices: [] as string[],
   renderedSettings: [] as FakeSetting[],
+  suggestionSelections: [] as ((value: string) => void)[],
 }));
 
 vi.mock("obsidian", () => {
@@ -128,6 +129,25 @@ vi.mock("obsidian", () => {
     }
   }
 
+  class AbstractInputSuggest<T> {
+    private selection: (value: T) => void = () => undefined;
+
+    constructor() {
+      suggestionSelections.push((value) => {
+        this.selection(value as T);
+      });
+    }
+
+    onSelect(callback: (value: T) => void): this {
+      this.selection = callback;
+      return this;
+    }
+
+    close(): void {
+      return;
+    }
+  }
+
   return {
     Notice: class Notice {
       readonly message: string;
@@ -144,6 +164,7 @@ vi.mock("obsidian", () => {
         this.containerEl.empty();
       }
     },
+    AbstractInputSuggest,
     Setting,
   };
 });
@@ -161,7 +182,7 @@ const provider = (id: string, displayName: string): ReadingProviderPort => ({
 
 const settingsRepository = (settings: ImportSettings = { defaultFolder: "" }): SettingsRepositoryPort => ({
   load: () => Promise.resolve(settings),
-  save: () => Promise.resolve(),
+  update: (change) => Promise.resolve(change(settings)),
 });
 
 interface Deferred<T> {
@@ -187,6 +208,7 @@ describe("provider settings tab", () => {
   beforeEach(() => {
     notices.length = 0;
     renderedSettings.length = 0;
+    suggestionSelections.length = 0;
   });
 
   it("discovers every registry provider and never redisplays configured credentials", () => {
@@ -329,8 +351,11 @@ describe("provider settings tab", () => {
     expect(JSON.stringify({ notices, description: setting.description })).not.toContain(secret);
   });
 
-  it("keeps one enabled folder input through incremental typing and saves only the full value", async () => {
-    const save = vi.fn(() => Promise.resolve());
+  it("keeps one enabled folder input through incremental typing and saves automatically after a pause", async () => {
+    const update = vi.fn((change: (current: ImportSettings) => ImportSettings) => Promise.resolve(change({
+      defaultFolder: "Library",
+      lastFolder: "Recent imports",
+    })));
     const tab = new BookHighlightsSettingsTab(
       {} as App,
       {} as Plugin,
@@ -339,38 +364,42 @@ describe("provider settings tab", () => {
       { testCredential: vi.fn() },
       {
         load: (): Promise<ImportSettings> => Promise.resolve({ defaultFolder: "Library", lastFolder: "Recent imports" }),
-        save,
+        update,
       },
     );
 
     tab.render();
     const setting = settingNamed("Default import folder");
     const input = setting.texts[0];
-    const saveButton = setting.buttons.find((button) => button.text === "Save default folder");
-    if (input === undefined || saveButton === undefined) throw new Error("Missing default folder controls");
+    if (input === undefined) throw new Error("Missing default folder input");
     await vi.waitFor(() => {
       expect(input).toMatchObject({ value: "Library", disabled: false });
-      expect(saveButton.disabled).toBe(false);
     });
 
-    await input.change("B");
-    expect(setting.texts[0]).toBe(input);
-    expect(input).toMatchObject({ value: "B", disabled: false });
-    await input.change("Bo");
-    expect(setting.texts[0]).toBe(input);
-    expect(input).toMatchObject({ value: "Bo", disabled: false });
-    await input.change("Books");
-    expect(setting.texts[0]).toBe(input);
-    expect(input).toMatchObject({ value: "Books", disabled: false });
-    expect(save).not.toHaveBeenCalled();
+    vi.useFakeTimers();
+    try {
+      await input.change("B");
+      await input.change("Bo");
+      await input.change("Books");
+      expect(setting.texts[0]).toBe(input);
+      expect(input).toMatchObject({ value: "Books", disabled: false });
+      expect(update).not.toHaveBeenCalled();
 
-    await saveButton.click();
+      vi.advanceTimersByTime(299);
+      await Promise.resolve();
+      expect(update).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1);
+      await Promise.resolve();
+      await Promise.resolve();
 
-    expect(save).toHaveBeenCalledOnce();
-    expect(save).toHaveBeenCalledWith({ defaultFolder: "Books", lastFolder: "Recent imports" });
-    expect(setting.description).toBe("Default import folder saved.");
-    expect(input.disabled).toBe(false);
-    expect(saveButton.disabledHistory).toEqual([true, false, true, false]);
+      expect(update).toHaveBeenCalledOnce();
+      expect(update).toHaveBeenCalledWith(expect.any(Function));
+      expect(setting.description).toBe("Default import folder saved.");
+      expect(input.disabled).toBe(false);
+      expect(setting.buttons).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("shows fixed safe status and notices when default-folder loading or saving fails", async () => {
@@ -383,7 +412,7 @@ describe("provider settings tab", () => {
       { testCredential: vi.fn() },
       {
         load: (): Promise<ImportSettings> => Promise.reject(new Error(secret)),
-        save: vi.fn(),
+        update: vi.fn(),
       },
     );
     loadFailure.render();
@@ -392,10 +421,10 @@ describe("provider settings tab", () => {
       expect(failedLoadSetting.description).toBe("Could not load import settings.");
     });
     expect(failedLoadSetting.texts[0]?.disabled).toBe(true);
-    expect(failedLoadSetting.buttons.find((button) => button.text === "Save default folder")?.disabled).toBe(true);
+    expect(failedLoadSetting.buttons).toEqual([]);
 
     renderedSettings.length = 0;
-    const save = vi.fn((): Promise<void> => Promise.reject(new Error(secret)));
+    const update = vi.fn((): Promise<ImportSettings> => Promise.reject(new Error(secret)));
     const saveFailure = new BookHighlightsSettingsTab(
       {} as App,
       {} as Plugin,
@@ -404,27 +433,72 @@ describe("provider settings tab", () => {
       { testCredential: vi.fn() },
       {
         load: (): Promise<ImportSettings> => Promise.resolve({ defaultFolder: "Books", lastFolder: "Recent" }),
-        save,
+        update,
       },
     );
     saveFailure.render();
     const failedSaveSetting = settingNamed("Default import folder");
     const input = failedSaveSetting.texts[0];
-    const saveButton = failedSaveSetting.buttons.find((button) => button.text === "Save default folder");
-    if (input === undefined || saveButton === undefined) throw new Error("Missing default folder controls");
+    if (input === undefined) throw new Error("Missing default folder input");
     await vi.waitFor(() => {
       expect(input.disabled).toBe(false);
     });
-    await input.change("Changed");
-    expect(save).not.toHaveBeenCalled();
-    await saveButton.click();
+    vi.useFakeTimers();
+    try {
+      await input.change("Changed");
+      expect(update).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(300);
+      await Promise.resolve();
+      await Promise.resolve();
 
-    expect(save).toHaveBeenCalledWith({ defaultFolder: "Changed", lastFolder: "Recent" });
-    expect(input).toMatchObject({ value: "Changed", disabled: false });
-    expect(saveButton.disabled).toBe(false);
-    expect(failedSaveSetting.description).toBe("Could not save default import folder.");
-    expect(notices).toEqual(["Could not load import settings.", "Could not save default import folder."]);
-    expect(JSON.stringify({ notices, renderedSettings })).not.toContain(secret);
+      expect(update).toHaveBeenCalledOnce();
+      expect(input).toMatchObject({ value: "Changed", disabled: false });
+      expect(failedSaveSetting.buttons).toEqual([]);
+      expect(failedSaveSetting.description).toBe("Could not save default import folder.");
+      expect(notices).toEqual(["Could not load import settings.", "Could not save default import folder."]);
+      expect(JSON.stringify({ notices, renderedSettings })).not.toContain(secret);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("applies a selected nested folder suggestion and persists it automatically", async () => {
+    const update = vi.fn((change: (current: ImportSettings) => ImportSettings) => Promise.resolve(change({
+      defaultFolder: "Books",
+    })));
+    const tab = new BookHighlightsSettingsTab(
+      {
+        vault: {
+          getAllFolders: () => [{ path: "Books" }, { path: "Books/To Read" }],
+        },
+      } as App,
+      {} as Plugin,
+      createProviderRegistry([]),
+      { get: (): null => null, set: vi.fn(), clear: vi.fn() },
+      { testCredential: vi.fn() },
+      { load: (): Promise<ImportSettings> => Promise.resolve({ defaultFolder: "Books" }), update },
+    );
+    tab.render();
+    const setting = settingNamed("Default import folder");
+    const input = setting.texts[0];
+    if (input === undefined) throw new Error("Missing default folder input");
+    await vi.waitFor(() => {
+      expect(input.disabled).toBe(false);
+    });
+    const selectSuggestion = suggestionSelections.at(-1);
+    if (selectSuggestion === undefined) throw new Error("Missing folder suggestion hook");
+
+    vi.useFakeTimers();
+    try {
+      selectSuggestion("Books/To Read");
+      expect(input.value).toBe("Books/To Read");
+      vi.advanceTimersByTime(300);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(update).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps a cleared provider not configured when an older connection test resolves", async () => {

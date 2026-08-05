@@ -137,6 +137,7 @@ describe("managed note properties", () => {
         void path;
         return Promise.resolve(content === "" ? { kind: "missing" } : { kind: "managed" });
       }),
+      ensureFolder: vi.fn(() => Promise.resolve()),
       create: vi.fn((_path: string, next: string) => {
         content = next;
         return Promise.resolve();

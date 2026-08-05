@@ -11,7 +11,8 @@ export type ManagedNoteError =
   | { readonly category: "empty-snapshot" }
   | { readonly category: "cancelled" }
   | { readonly category: "rendering-failed" }
-  | { readonly category: "destination-conflict" };
+  | { readonly category: "destination-conflict" }
+  | { readonly category: "destination-unavailable" };
 
 export interface ManagedNoteSuccess {
   readonly path: string;
@@ -43,6 +44,11 @@ const hasControlCharacter = (value: string): boolean => {
     if (code < 32 || code === 127) return true;
   }
   return false;
+};
+
+const folderFromPath = (path: string): string => {
+  const separator = path.lastIndexOf("/");
+  return separator === -1 ? "" : path.slice(0, separator);
 };
 
 export const createManagedNoteService = (dependencies: ManagedNoteDependencies): ManagedNoteService => {
@@ -96,10 +102,12 @@ export const createManagedNoteService = (dependencies: ManagedNoteDependencies):
 
     if (destination.kind === "missing") {
       try {
+        await dependencies.notes.ensureFolder(folderFromPath(path));
+        if (isActive?.() === false) return failure({ category: "cancelled" });
         const content = `${serializeFrontmatter(metadata)}${section}\n`;
         await dependencies.notes.create(path, content);
       } catch {
-        return failure({ category: "destination-conflict" });
+        return failure({ category: "destination-unavailable" });
       }
     } else {
       try {

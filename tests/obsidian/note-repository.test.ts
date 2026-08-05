@@ -20,6 +20,7 @@ describe("Obsidian note repository", () => {
     const repository = createObsidianNoteRepository({
       getFileByPath,
       getAbstractFileByPath,
+      createFolder: vi.fn(),
       create: vi.fn(),
       process: vi.fn(),
     }, { getLeaf: vi.fn() });
@@ -37,7 +38,7 @@ describe("Obsidian note repository", () => {
     const process = vi.fn();
     const getLeaf = vi.fn();
     const repository = createObsidianNoteRepository(
-      { getFileByPath, getAbstractFileByPath, create, process },
+      { getFileByPath, getAbstractFileByPath, createFolder: vi.fn(), create, process },
       { getLeaf },
     );
 
@@ -57,6 +58,7 @@ describe("Obsidian note repository", () => {
     const repository = createObsidianNoteRepository({
       getFileByPath: vi.fn(),
       getAbstractFileByPath: vi.fn(),
+      createFolder: vi.fn(),
       create,
       process: vi.fn(),
     }, { getLeaf: vi.fn() });
@@ -65,6 +67,59 @@ describe("Obsidian note repository", () => {
 
     expect(create).toHaveBeenCalledOnce();
     expect(create).toHaveBeenCalledWith("Books/Dune.md", "complete note");
+  });
+
+  it("creates missing folder segments in normalized order", async () => {
+    const folders = new Set<string>();
+    const createFolder = vi.fn<(path: string) => Promise<object>>().mockImplementation((path) => {
+      folders.add(path);
+      return Promise.resolve({ path });
+    });
+    const repository = createObsidianNoteRepository({
+      getFileByPath: vi.fn((path: string) => path.endsWith(".md") ? file : null),
+      getAbstractFileByPath: vi.fn((path: string) => folders.has(path) ? { path } : null),
+      createFolder,
+      create: vi.fn(),
+      process: vi.fn(),
+    }, { getLeaf: vi.fn() });
+
+    await repository.ensureFolder("/Books\\To Read");
+
+    expect(createFolder).toHaveBeenCalledWith("Books");
+    expect(createFolder).toHaveBeenCalledWith("Books/To Read");
+    expect(createFolder).toHaveBeenCalledTimes(2);
+  });
+
+  it("accepts an existing folder and rejects a file occupying a folder path", async () => {
+    const createFolder = vi.fn<(path: string) => Promise<object>>().mockResolvedValue({});
+    const repository = createObsidianNoteRepository({
+      getFileByPath: vi.fn((path: string) => path === "Books" ? file : null),
+      getAbstractFileByPath: vi.fn((path: string) => path === "Archive" ? { path } : null),
+      createFolder,
+      create: vi.fn(),
+      process: vi.fn(),
+    }, { getLeaf: vi.fn() });
+
+    await repository.ensureFolder("Archive");
+    await expect(repository.ensureFolder("Books/To Read")).rejects.toThrow("not a folder");
+    expect(createFolder).not.toHaveBeenCalled();
+  });
+
+  it("treats a concurrent folder creator as success", async () => {
+    let exists = false;
+    const createFolder = vi.fn<(path: string) => Promise<object>>().mockImplementation(() => {
+      exists = true;
+      return Promise.reject(new Error("already exists"));
+    });
+    const repository = createObsidianNoteRepository({
+      getFileByPath: vi.fn(() => null),
+      getAbstractFileByPath: vi.fn(() => exists ? { path: "Books" } : null),
+      createFolder,
+      create: vi.fn(),
+      process: vi.fn(),
+    }, { getLeaf: vi.fn() });
+
+    await expect(repository.ensureFolder("Books")).resolves.toBeUndefined();
   });
 
   it("processes the latest file content in one atomic host call", async () => {
@@ -77,6 +132,7 @@ describe("Obsidian note repository", () => {
     const repository = createObsidianNoteRepository({
       getFileByPath: vi.fn().mockReturnValue(file),
       getAbstractFileByPath: vi.fn(),
+      createFolder: vi.fn(),
       create: vi.fn(),
       process,
     }, { getLeaf: vi.fn() });
@@ -94,6 +150,7 @@ describe("Obsidian note repository", () => {
     const repository = createObsidianNoteRepository({
       getFileByPath: vi.fn().mockReturnValue(null),
       getAbstractFileByPath: vi.fn().mockReturnValue({ path: "Books" }),
+      createFolder: vi.fn(),
       create: vi.fn(),
       process,
     }, { getLeaf });
@@ -110,6 +167,7 @@ describe("Obsidian note repository", () => {
     const repository = createObsidianNoteRepository({
       getFileByPath: vi.fn().mockReturnValue(file),
       getAbstractFileByPath: vi.fn(),
+      createFolder: vi.fn(),
       create: vi.fn(),
       process: vi.fn(),
     }, { getLeaf });
@@ -127,6 +185,7 @@ describe("Obsidian note repository", () => {
     const repository = createObsidianNoteRepository({
       getFileByPath: vi.fn().mockReturnValue(file),
       getAbstractFileByPath: vi.fn(),
+      createFolder: vi.fn(),
       create: vi.fn().mockRejectedValue(createFailure),
       process: vi.fn().mockRejectedValue(processFailure),
     }, {

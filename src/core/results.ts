@@ -25,6 +25,7 @@ export type ImportError =
   | { readonly category: "cancelled" }
   | { readonly category: "renderer-unavailable" }
   | { readonly category: "destination-conflict" }
+  | { readonly category: "destination-unavailable" }
   | { readonly category: "provider-not-registered"; readonly providerId: string }
   | { readonly category: "rendering-failed" };
 

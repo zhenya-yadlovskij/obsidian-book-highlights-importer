@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, type Mock } from "vitest";
 import { createBookAnnotation, createImportSnapshot, createProviderBook } from "../../src/core/models";
 import type { NoteRepositoryPort } from "../../src/core/ports";
 import { createManagedSection } from "../../src/notes/markers";
@@ -19,8 +19,18 @@ const snapshot = (text: string): ReturnType<typeof createImportSnapshot> => crea
   fetchedAt: 100,
 });
 
-const repository = (state: "missing" | "managed" | "conflict", current = "", inspectionFailure = false): NoteRepositoryPort & { writes: string[] } => {
+interface TestRepository extends NoteRepositoryPort {
+  readonly writes: string[];
+  readonly ensureFolder: Mock<(folder: string) => Promise<void>>;
+  readonly create: Mock<(path: string, content: string) => Promise<void>>;
+}
+
+const repository = (state: "missing" | "managed" | "conflict", current = "", inspectionFailure = false): TestRepository => {
   const writes: string[] = [];
+  const ensureFolder = vi.fn<(folder: string) => Promise<void>>().mockImplementation((folder) => {
+    void folder;
+    return Promise.resolve();
+  });
   return {
     writes,
     inspect: vi.fn(() => inspectionFailure ? Promise.reject(new Error("vault unavailable")) : Promise.resolve({ kind: state })),
@@ -32,6 +42,7 @@ const repository = (state: "missing" | "managed" | "conflict", current = "", ins
       writes.push(update(current));
       return Promise.resolve();
     }),
+    ensureFolder,
     open: vi.fn(() => Promise.resolve()),
   };
 };
@@ -52,6 +63,44 @@ describe("managed note service", () => {
       expect(firstWrite).toContain("<!-- book-highlights-importer:start version=1 provider=provider book-id=book-1 -->");
       expect(firstWrite).toContain("> Highlight");
     }
+  });
+
+  it("ensures a missing destination folder before creating a note", async () => {
+    const notes = repository("missing");
+    const service = createManagedNoteService({ notes });
+
+    const result = await service.write("Books/Title.md", snapshot("Highlight"));
+
+    expect(result).toEqual({ ok: true, value: { path: "Books/Title.md", annotationCount: 1 } });
+    expect(notes.ensureFolder).toHaveBeenCalledWith("Books");
+    expect(notes.ensureFolder).toHaveBeenCalledBefore(notes.create);
+  });
+
+  it("does not create a note when its destination folder cannot be created", async () => {
+    const notes = repository("missing");
+    notes.ensureFolder.mockRejectedValue(new Error("folder unavailable"));
+    const service = createManagedNoteService({ notes });
+
+    const result = await service.write("Books/Title.md", snapshot("Highlight"));
+
+    expect(result).toEqual({ ok: false, error: { category: "destination-unavailable" } });
+    expect(notes.create).not.toHaveBeenCalled();
+    expect(notes.process).not.toHaveBeenCalled();
+  });
+
+  it("cancels after folder preparation without creating the note", async () => {
+    let active = true;
+    const notes = repository("missing");
+    notes.ensureFolder.mockImplementation(() => {
+      active = false;
+      return Promise.resolve();
+    });
+    const service = createManagedNoteService({ notes });
+
+    const result = await service.write("Books/Title.md", snapshot("Highlight"), () => active);
+
+    expect(result).toEqual({ ok: false, error: { category: "cancelled" } });
+    expect(notes.create).not.toHaveBeenCalled();
   });
 
   it("processes the latest content and replaces the complete managed snapshot", async () => {

@@ -11,6 +11,7 @@ import {
 import type { ImportUseCase } from "../core/import";
 import type { CredentialStorePort, ImportError, ImportSettings, SettingsRepositoryPort } from "../core/ports";
 import type { ProviderRegistry } from "../core/registry";
+import { FolderSuggest, type FolderSource } from "./obsidian-folder-suggest";
 
 const connectionDescription = (error: ImportError): string => {
   switch (error.category) {
@@ -28,6 +29,7 @@ const connectionDescription = (error: ImportError): string => {
 };
 
 export class BookHighlightsSettingsTab extends PluginSettingTab {
+  private readonly appInstance: App;
   private readonly registry: ProviderRegistry;
   private readonly credentials: CredentialStorePort;
   private readonly imports: Pick<ImportUseCase, "testCredential">;
@@ -35,6 +37,8 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
   private readonly temporaryCredentials = new Map<string, string>();
   private readonly credentialInputs: TextComponent[] = [];
   private readonly connectionTestGenerations = new Map<string, number>();
+  private defaultFolderCleanup: (() => void) | undefined;
+  private defaultFolderSuggest: FolderSuggest | undefined;
   private renderGeneration = 0;
 
   constructor(
@@ -46,6 +50,7 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
     settings: SettingsRepositoryPort,
   ) {
     super(app, plugin);
+    this.appInstance = app;
     this.registry = registry;
     this.credentials = credentials;
     this.imports = imports;
@@ -57,6 +62,7 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
   }
 
   render(): void {
+    this.clearDefaultFolderEditing();
     const renderGeneration = ++this.renderGeneration;
     this.clearTemporaryCredentials();
     this.containerEl.empty();
@@ -157,6 +163,7 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
 
   override hide(): void {
     this.renderGeneration += 1;
+    this.clearDefaultFolderEditing();
     this.clearTemporaryCredentials();
     super.hide();
   }
@@ -168,7 +175,36 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
     let currentSettings: ImportSettings | undefined;
     let defaultFolder = "";
     let input!: TextComponent;
-    let saveButton!: ButtonComponent;
+    let saveTimer: ReturnType<typeof setTimeout> | undefined;
+    let saveGeneration = 0;
+
+    const scheduleSave = (): void => {
+      if (saveTimer !== undefined) clearTimeout(saveTimer);
+      const scheduledGeneration = ++saveGeneration;
+      saveTimer = setTimeout(() => {
+        saveTimer = undefined;
+        const savedFolder = defaultFolder;
+        void this.settings.update((settings) => ({ ...settings, defaultFolder: savedFolder }))
+          .then((updated) => {
+            if (renderGeneration !== this.renderGeneration || scheduledGeneration !== saveGeneration) return;
+            currentSettings = updated;
+            setting.setDesc("Default import folder saved.");
+          })
+          .catch(() => {
+            if (renderGeneration !== this.renderGeneration || scheduledGeneration !== saveGeneration) return;
+            setting.setDesc("Could not save default import folder.");
+            new Notice("Could not save default import folder.");
+          });
+      }, 300);
+    };
+
+    this.defaultFolderCleanup = (): void => {
+      saveGeneration += 1;
+      if (saveTimer !== undefined) clearTimeout(saveTimer);
+      saveTimer = undefined;
+      this.defaultFolderSuggest?.close();
+      this.defaultFolderSuggest = undefined;
+    };
 
     setting.addText((text) => {
       input = text;
@@ -179,48 +215,35 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
           if (currentSettings === undefined || renderGeneration !== this.renderGeneration) return;
           defaultFolder = value;
           setting.setDesc("Default import folder has unsaved changes.");
+          scheduleSave();
         });
     });
-    setting.addButton((button) => {
-      saveButton = button;
-      button
-        .setButtonText("Save default folder")
-        .setDisabled(true)
-        .onClick(async () => {
-          const previous = currentSettings;
-          if (previous === undefined || renderGeneration !== this.renderGeneration) return;
-          const savedFolder = defaultFolder;
-          const updated: ImportSettings = { ...previous, defaultFolder: savedFolder };
-          button.setDisabled(true);
-          try {
-            await this.settings.save(updated);
-            if (renderGeneration !== this.renderGeneration) return;
-            currentSettings = updated;
-            setting.setDesc(defaultFolder === savedFolder
-              ? "Default import folder saved."
-              : "Default import folder has unsaved changes.");
-          } catch {
-            if (renderGeneration !== this.renderGeneration) return;
-            setting.setDesc("Could not save default import folder.");
-            new Notice("Could not save default import folder.");
-          } finally {
-            if (renderGeneration === this.renderGeneration) button.setDisabled(false);
-          }
-        });
-    });
+    const folders = (this.appInstance as unknown as { readonly vault?: FolderSource }).vault;
+    if (folders !== undefined) {
+      this.defaultFolderSuggest = new FolderSuggest(this.appInstance, input.inputEl, folders, (value) => {
+        defaultFolder = value;
+        input.setValue(value);
+        setting.setDesc("Default import folder has unsaved changes.");
+        scheduleSave();
+      });
+    }
 
     void this.settings.load().then((loaded) => {
       if (renderGeneration !== this.renderGeneration) return;
       currentSettings = loaded;
       defaultFolder = loaded.defaultFolder;
       input.setValue(loaded.defaultFolder).setDisabled(false);
-      saveButton.setDisabled(false);
       setting.setDesc("Vault-relative folder used before any successful import.");
     }).catch(() => {
       if (renderGeneration !== this.renderGeneration) return;
       setting.setDesc("Could not load import settings.");
       new Notice("Could not load import settings.");
     });
+  }
+
+  private clearDefaultFolderEditing(): void {
+    this.defaultFolderCleanup?.();
+    this.defaultFolderCleanup = undefined;
   }
 
   private invalidateConnectionTest(providerId: string): number {

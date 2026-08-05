@@ -54,7 +54,7 @@ describe("Obsidian settings repository", () => {
       yandexBooksToken: "must-not-leak",
     } as ImportSettings;
 
-    await repository.save(settings);
+    await repository.update(() => settings);
 
     expect(host.saveData).toHaveBeenCalledOnce();
     expect(host.saveData).toHaveBeenCalledWith({
@@ -69,9 +69,62 @@ describe("Obsidian settings repository", () => {
     const host = createHost(null);
     const repository = createObsidianSettingsRepository(host);
 
-    await repository.save({ defaultFolder: "Books" });
+    await repository.update(() => ({ defaultFolder: "Books" }));
 
     expect(host.saveData).toHaveBeenCalledWith({ version: 1, defaultFolder: "Books" });
+  });
+
+  it("serializes updates against the latest persisted settings", async () => {
+    const host = createHost({ version: 1, defaultFolder: "Books", lastFolder: "Archive" });
+    const repository = createObsidianSettingsRepository(host);
+
+    const defaultFolder = repository.update((current) => ({ ...current, defaultFolder: "Finished" }));
+    const lastFolder = repository.update((current) => ({ ...current, lastFolder: "Recent" }));
+
+    await expect(Promise.all([defaultFolder, lastFolder])).resolves.toEqual([
+      { defaultFolder: "Finished", lastFolder: "Archive" },
+      { defaultFolder: "Finished", lastFolder: "Recent" },
+    ]);
+    expect(host.saveData).toHaveBeenNthCalledWith(1, {
+      version: 1,
+      defaultFolder: "Finished",
+      lastFolder: "Archive",
+    });
+    expect(host.saveData).toHaveBeenNthCalledWith(2, {
+      version: 1,
+      defaultFolder: "Finished",
+      lastFolder: "Recent",
+    });
+  });
+
+  it("shares an in-flight load with updates instead of restoring stale cached settings", async () => {
+    let resolveLoad!: (value: unknown) => void;
+    const firstLoad = new Promise<unknown>((resolve) => {
+      resolveLoad = resolve;
+    });
+    const host = {
+      loadData: vi.fn<() => Promise<unknown>>()
+        .mockImplementationOnce(() => firstLoad)
+        .mockResolvedValue({ version: 1, defaultFolder: "Books" }),
+      saveData: vi.fn<(data: unknown) => Promise<void>>().mockResolvedValue(undefined),
+    };
+    const repository = createObsidianSettingsRepository(host);
+    const loading = repository.load();
+    await Promise.resolve();
+    const updating = repository.update((current) => ({ ...current, defaultFolder: "Finished" }));
+
+    expect(host.loadData).toHaveBeenCalledOnce();
+    resolveLoad({ version: 1, defaultFolder: "Books" });
+    await expect(Promise.all([loading, updating])).resolves.toEqual([
+      { defaultFolder: "Books" },
+      { defaultFolder: "Finished" },
+    ]);
+    await repository.update((current) => ({ ...current, lastFolder: "Recent" }));
+    expect(host.saveData).toHaveBeenLastCalledWith({
+      version: 1,
+      defaultFolder: "Finished",
+      lastFolder: "Recent",
+    });
   });
 
   it("propagates plugin-data failures for the use case to classify", async () => {
@@ -84,6 +137,12 @@ describe("Obsidian settings repository", () => {
     const repository = createObsidianSettingsRepository(host);
 
     await expect(repository.load()).rejects.toBe(loadFailure);
-    await expect(repository.save({ defaultFolder: "" })).rejects.toBe(saveFailure);
+    await expect(repository.update(() => ({ defaultFolder: "" }))).rejects.toBe(loadFailure);
+
+    const saveRepository = createObsidianSettingsRepository({
+      loadData: vi.fn().mockResolvedValue(null),
+      saveData: vi.fn().mockRejectedValue(saveFailure),
+    });
+    await expect(saveRepository.update(() => ({ defaultFolder: "" }))).rejects.toBe(saveFailure);
   });
 });

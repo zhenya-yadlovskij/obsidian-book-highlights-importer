@@ -69,6 +69,7 @@ const createMemoryNotes = (initial?: string): MemoryNotes => {
       operations.inspect += 1;
       return Promise.resolve(content === undefined ? { kind: "missing" } : { kind: "managed" });
     },
+    ensureFolder: (): Promise<void> => Promise.resolve(),
     create: (_path, next): Promise<void> => {
       operations.create += 1;
       content = next;
@@ -109,10 +110,10 @@ const createMemorySettings = (): MemorySettings => {
         operations.load += 1;
         return Promise.resolve(settings);
       },
-      save: (next): Promise<void> => {
+      update: (change): Promise<ImportSettings> => {
         operations.save += 1;
-        settings = next;
-        return Promise.resolve();
+        settings = change(settings);
+        return Promise.resolve(settings);
       },
     },
   };

@@ -34,7 +34,7 @@ export interface ImportSettings {
 
 export interface SettingsRepositoryPort {
   readonly load: () => Promise<ImportSettings>;
-  readonly save: (settings: ImportSettings) => Promise<void>;
+  readonly update: (change: (current: ImportSettings) => ImportSettings) => Promise<ImportSettings>;
 }
 
 export type DestinationState =
@@ -44,6 +44,7 @@ export type DestinationState =
 
 export interface NoteRepositoryPort {
   readonly inspect: (path: string) => Promise<DestinationState>;
+  readonly ensureFolder: (folder: string) => Promise<void>;
   readonly create: (path: string, content: string) => Promise<void>;
   readonly process: (path: string, update: (current: string) => string) => Promise<void>;
   readonly open: (path: string) => Promise<void>;
