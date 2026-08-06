@@ -246,11 +246,13 @@ describe("provider settings tab", () => {
   });
 
   it("explains how to obtain a Yandex OAuth token and opens authorization", async () => {
+    const set = vi.fn();
+    const clear = vi.fn();
     const tab = new BookHighlightsSettingsTab(
       {} as App,
       {} as Plugin,
       createProviderRegistry([provider("yandex-books", "Yandex Books")]),
-      { get: (): null => null, set: vi.fn(), clear: vi.fn() },
+      { get: (): null => null, set, clear },
       { testCredential: vi.fn() },
       settingsRepository(),
       (url: string): void => {
@@ -274,6 +276,27 @@ describe("provider settings tab", () => {
     expect(openedExternalUrls).toEqual([
       "https://oauth.yandex.ru/authorize?response_type=token&client_id=4483e97bab6e486a9822973109a14d05",
     ]);
+    expect(set).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
+  it("keeps replacement guidance visible for a configured Yandex token", () => {
+    const tab = new BookHighlightsSettingsTab(
+      {} as App,
+      {} as Plugin,
+      createProviderRegistry([provider("yandex-books", "Yandex Books")]),
+      { get: (): string => "stored-token", set: vi.fn(), clear: vi.fn() },
+      { testCredential: vi.fn() },
+      settingsRepository(),
+    );
+
+    tab.render();
+
+    const guidance = settingNamed("Yandex OAuth token");
+    const yandex = settingNamed("Yandex Books");
+    expect(guidance.description).toContain("authorize Yandex");
+    expect(yandex.texts[0]).toMatchObject({ placeholder: "Yandex OAuth token", value: "" });
+    expect(JSON.stringify(renderedSettings)).not.toContain("stored-token");
   });
 
   it("saves, replaces, and clears only the temporary provider credential", async () => {
