@@ -13,6 +13,9 @@ import type { CredentialStorePort, ImportError, ImportSettings, SettingsReposito
 import type { ProviderRegistry } from "../core/registry";
 import { FolderSuggest, type FolderSource } from "./obsidian-folder-suggest";
 
+const YANDEX_BOOKS_PROVIDER_ID = "yandex-books";
+const YANDEX_OAUTH_URL = "https://oauth.yandex.ru/authorize?response_type=token&client_id=4483e97bab6e486a9822973109a14d05";
+
 const connectionDescription = (error: ImportError): string => {
   switch (error.category) {
     case "missing-credential":
@@ -34,6 +37,7 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
   private readonly credentials: CredentialStorePort;
   private readonly imports: Pick<ImportUseCase, "testCredential">;
   private readonly settings: SettingsRepositoryPort;
+  private readonly openExternalUrl: (url: string) => void;
   private readonly temporaryCredentials = new Map<string, string>();
   private readonly credentialInputs: TextComponent[] = [];
   private readonly connectionTestGenerations = new Map<string, number>();
@@ -48,6 +52,15 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
     credentials: CredentialStorePort,
     imports: Pick<ImportUseCase, "testCredential">,
     settings: SettingsRepositoryPort,
+    openExternalUrl: (url: string) => void = (url) => {
+      const link = document.createElement("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    },
   ) {
     super(app, plugin);
     this.appInstance = app;
@@ -55,6 +68,7 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
     this.credentials = credentials;
     this.imports = imports;
     this.settings = settings;
+    this.openExternalUrl = openExternalUrl;
   }
 
   override display(): void {
@@ -69,6 +83,7 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
     this.renderDefaultFolder(renderGeneration);
 
     for (const provider of this.registry.all()) {
+      if (provider.id === YANDEX_BOOKS_PROVIDER_ID) this.renderYandexOAuthSetup();
       let configured = false;
       try {
         configured = this.credentials.get(provider.id) !== null;
@@ -86,7 +101,9 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
         input = text;
         this.credentialInputs.push(text);
         text.inputEl.type = "password";
-        text.setPlaceholder(configured ? "Enter replacement credential" : "Enter credential");
+        text.setPlaceholder(provider.id === YANDEX_BOOKS_PROVIDER_ID
+          ? "Yandex OAuth token"
+          : configured ? "Enter replacement credential" : "Enter credential");
         text.onChange((value) => {
           this.temporaryCredentials.set(provider.id, value);
         });
@@ -239,6 +256,17 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
       setting.setDesc("Could not load import settings.");
       new Notice("Could not load import settings.");
     });
+  }
+
+  private renderYandexOAuthSetup(): void {
+    new Setting(this.containerEl)
+      .setName("Yandex OAuth token")
+      .setDesc("To get a Yandex OAuth token, authorize Yandex, copy the y0_... token from the browser URL, and paste it into the field.")
+      .addButton((button) => button
+        .setButtonText("Get Yandex OAuth token")
+        .onClick(() => {
+          this.openExternalUrl(YANDEX_OAUTH_URL);
+        }));
   }
 
   private clearDefaultFolderEditing(): void {

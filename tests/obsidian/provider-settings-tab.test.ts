@@ -7,6 +7,7 @@ import { createProviderRegistry } from "../../src/core/registry";
 interface FakeText {
   readonly inputEl: { type: string };
   value: string;
+  placeholder: string;
   disabled: boolean;
   change(value: string): Promise<void>;
 }
@@ -25,8 +26,9 @@ interface FakeSetting {
   readonly buttons: FakeButton[];
 }
 
-const { notices, renderedSettings, suggestionSelections } = vi.hoisted(() => ({
+const { notices, openedExternalUrls, renderedSettings, suggestionSelections } = vi.hoisted(() => ({
   notices: [] as string[],
+  openedExternalUrls: [] as string[],
   renderedSettings: [] as FakeSetting[],
   suggestionSelections: [] as ((value: string) => void)[],
 }));
@@ -35,6 +37,7 @@ vi.mock("obsidian", () => {
   class TextComponent implements FakeText {
     readonly inputEl = { type: "text" };
     value = "";
+    placeholder = "";
     disabled = false;
     private onChangeCallback: (value: string) => void | Promise<void> = () => undefined;
 
@@ -43,7 +46,8 @@ vi.mock("obsidian", () => {
       return this;
     }
 
-    setPlaceholder(): this {
+    setPlaceholder(value: string): this {
+      this.placeholder = value;
       return this;
     }
 
@@ -207,6 +211,7 @@ const settingNamed = (name: string): FakeSetting => {
 describe("provider settings tab", () => {
   beforeEach(() => {
     notices.length = 0;
+    openedExternalUrls.length = 0;
     renderedSettings.length = 0;
     suggestionSelections.length = 0;
   });
@@ -231,9 +236,44 @@ describe("provider settings tab", () => {
     const litres = settingNamed("LitRes");
     expect(yandex.description).toBe("Configured");
     expect(litres.description).toBe("Not configured");
-    expect(yandex.texts[0]).toMatchObject({ value: "", inputEl: { type: "password" } });
+    expect(yandex.texts[0]).toMatchObject({
+      value: "",
+      placeholder: "Yandex OAuth token",
+      inputEl: { type: "password" },
+    });
     expect(litres.texts[0]).toMatchObject({ value: "", inputEl: { type: "password" } });
     expect(JSON.stringify(renderedSettings)).not.toContain("stored-secret");
+  });
+
+  it("explains how to obtain a Yandex OAuth token and opens authorization", async () => {
+    const tab = new BookHighlightsSettingsTab(
+      {} as App,
+      {} as Plugin,
+      createProviderRegistry([provider("yandex-books", "Yandex Books")]),
+      { get: (): null => null, set: vi.fn(), clear: vi.fn() },
+      { testCredential: vi.fn() },
+      settingsRepository(),
+      (url: string): void => {
+        openedExternalUrls.push(url);
+      },
+    );
+
+    tab.render();
+
+    const guidance = settingNamed("Yandex OAuth token");
+    const yandex = settingNamed("Yandex Books");
+    expect(yandex.texts[0]).toMatchObject({ placeholder: "Yandex OAuth token" });
+    expect(guidance.description).toContain("authorize Yandex");
+    expect(guidance.description).toContain("copy the y0_... token from the browser URL");
+    expect(guidance.description).toContain("paste it into the field");
+    const getToken = guidance.buttons.find((button) => button.text === "Get Yandex OAuth token");
+    if (getToken === undefined) throw new Error("Missing Yandex OAuth token button");
+
+    await getToken.click();
+
+    expect(openedExternalUrls).toEqual([
+      "https://oauth.yandex.ru/authorize?response_type=token&client_id=4483e97bab6e486a9822973109a14d05",
+    ]);
   });
 
   it("saves, replaces, and clears only the temporary provider credential", async () => {
