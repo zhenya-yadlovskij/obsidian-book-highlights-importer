@@ -13,7 +13,7 @@ Book Highlights Importer is an Obsidian plugin that imports highlights and comme
 - Search your authenticated Yandex Books library by title or author.
 - Browse books grouped as In progress, Finished, and Unread or unknown.
 - Import one book's highlights and comments through `Provider > Book > Destination`.
-- Choose a vault-relative folder and filename, with a configurable default folder.
+- Choose a **Vault-relative folder** and filename, with a configurable default folder.
 - Replace only the plugin-owned **Managed Section** on re-import while preserving user Markdown and unrelated properties.
 - Run on Obsidian desktop and mobile, version 1.11.4 or newer.
 
@@ -56,7 +56,7 @@ Catalog installation is not available yet. After publication, users will be able
 4. Confirm the destination folder and filename.
 5. Select `Import`.
 
-The default filename is `Author - Title.md`. After a successful import, the plugin opens the destination **Managed Book Note**.
+The default filename is `Author - Title.md`. After a successful import, the plugin attempts to open the destination **Managed Book Note**.
 
 ## Generated notes
 
