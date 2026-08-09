@@ -22,5 +22,5 @@
 
 - [x] 4.1 Run `openspec validate obsidian-publishing-fixes --type change --strict` and resolve any validation errors.
 - [x] 4.2 Run `npm run check` and confirm type checking, linting, tests, build, and release verification pass.
-- [ ] 4.3 Create a GitHub release named with `0.1.1` using the built release assets.
+- [x] 4.3 Create a GitHub release named with `0.1.1` using the built release assets.
 - [ ] 4.4 Submit the `0.1.1` release to Obsidian plugin review and confirm the fresh review reports no errors or warnings.
