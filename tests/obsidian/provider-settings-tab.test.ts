@@ -164,6 +164,10 @@ vi.mock("obsidian", () => {
     PluginSettingTab: class PluginSettingTab {
       readonly containerEl = { empty: vi.fn() };
 
+      getSettingDefinitions(): unknown[] {
+        return [];
+      }
+
       hide(): void {
         this.containerEl.empty();
       }
@@ -210,10 +214,28 @@ const settingNamed = (name: string): FakeSetting => {
 
 describe("provider settings tab", () => {
   beforeEach(() => {
+    vi.stubGlobal("window", globalThis);
     notices.length = 0;
     openedExternalUrls.length = 0;
     renderedSettings.length = 0;
     suggestionSelections.length = 0;
+  });
+
+  it("exposes searchable definitions for all user-facing settings", () => {
+    const tab = new BookHighlightsSettingsTab(
+      {} as App,
+      {} as Plugin,
+      createProviderRegistry([provider("yandex-books", "Yandex Books")]),
+      { get: (): null => null, set: vi.fn(), clear: vi.fn() },
+      { testCredential: vi.fn() },
+      settingsRepository(),
+    );
+
+    expect(tab.getSettingDefinitions()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "Default import folder", searchable: true }),
+      expect.objectContaining({ name: "Yandex OAuth token", searchable: true }),
+      expect.objectContaining({ name: "Yandex Books", searchable: true }),
+    ]));
   });
 
   it("discovers every registry provider and never redisplays configured credentials", () => {

@@ -23,6 +23,6 @@ export class FolderSuggest extends AbstractInputSuggest<string> {
   }
 
   renderSuggestion(value: string, el: HTMLElement): void {
-    el.createEl("div", { text: value });
+    el.createDiv({ text: value });
   }
 }

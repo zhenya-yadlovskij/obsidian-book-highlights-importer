@@ -1,6 +1,6 @@
 {
   "name": "book-highlights-importer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Import book highlights and notes into managed Obsidian Markdown sections.",
   "type": "module",
   "private": true,

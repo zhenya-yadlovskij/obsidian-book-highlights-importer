@@ -18,8 +18,14 @@ const bundle = await stat(new URL("main.js", releaseDirectory));
 if (manifest.id !== "book-highlights-importer") {
   throw new Error("Release manifest has an unexpected plugin ID.");
 }
-if (manifest.minAppVersion !== "1.11.4") {
-  throw new Error("Release manifest has an unexpected minimum app version.");
+if (manifest.version !== "0.1.1") {
+  throw new Error("Release manifest must declare version 0.1.1.");
+}
+if (manifest.minAppVersion !== "1.13.0") {
+  throw new Error("Release manifest must require Obsidian 1.13.0.");
+}
+if (/obsidian/i.test(manifest.description)) {
+  throw new Error("Release manifest description must not contain Obsidian.");
 }
 if (manifest.isDesktopOnly !== false) {
   throw new Error("Release manifest must support mobile.");

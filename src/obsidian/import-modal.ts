@@ -149,7 +149,7 @@ export class ImportBookHighlightsModal extends Modal {
           this.controller.search(value);
         }));
 
-    this.bookResultsEl = this.contentEl.createEl("div");
+    this.bookResultsEl = this.contentEl.createDiv();
     this.renderBookResults(state);
     this.addBackAndCancel();
   }

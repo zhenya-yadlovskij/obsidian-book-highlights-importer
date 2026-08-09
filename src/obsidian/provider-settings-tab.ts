@@ -5,6 +5,7 @@ import {
   type App,
   type ButtonComponent,
   type Plugin,
+  type SettingDefinitionItem,
   type TextComponent,
 } from "obsidian";
 
@@ -52,15 +53,7 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
     credentials: CredentialStorePort,
     imports: Pick<ImportUseCase, "testCredential">,
     settings: SettingsRepositoryPort,
-    openExternalUrl: (url: string) => void = (url) => {
-      const link = document.createElement("a");
-      link.href = url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-    },
+    openExternalUrl?: (url: string) => void,
   ) {
     super(app, plugin);
     this.appInstance = app;
@@ -68,11 +61,54 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
     this.credentials = credentials;
     this.imports = imports;
     this.settings = settings;
-    this.openExternalUrl = openExternalUrl;
+    this.openExternalUrl = openExternalUrl ?? ((url): void => {
+      const link = this.containerEl.createEl("a");
+      link.href = url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.click();
+      link.remove();
+    });
   }
 
   override display(): void {
     this.render();
+  }
+
+  override getSettingDefinitions(): SettingDefinitionItem[] {
+    const renderGeneration = ++this.renderGeneration;
+    this.clearDefaultFolderEditing();
+    this.clearTemporaryCredentials();
+    const definitions: SettingDefinitionItem[] = [{
+      name: "Default import folder",
+      desc: "Vault-relative folder used before any successful import.",
+      searchable: true,
+      render: (setting): void => {
+        this.renderDefaultFolderSetting(setting, renderGeneration);
+      },
+    }];
+
+    for (const provider of this.registry.all()) {
+      if (provider.id === YANDEX_BOOKS_PROVIDER_ID) {
+        definitions.push({
+          name: "Yandex OAuth token",
+          desc: "Authorize Yandex, copy the y0_... token from the browser URL, and paste it into the field.",
+          searchable: true,
+          render: (setting): void => {
+            this.renderYandexOAuthSetup(setting);
+          },
+        });
+      }
+      definitions.push({
+        name: provider.displayName,
+        desc: "Configure, replace, clear, or test this provider credential.",
+        searchable: true,
+        render: (setting): void => {
+          this.renderProviderSetting(setting, provider, renderGeneration);
+        },
+      });
+    }
+    return definitions;
   }
 
   render(): void {
@@ -83,99 +119,105 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
     this.renderDefaultFolder(renderGeneration);
 
     for (const provider of this.registry.all()) {
-      if (provider.id === YANDEX_BOOKS_PROVIDER_ID) this.renderYandexOAuthSetup();
-      let configured = false;
-      try {
-        configured = this.credentials.get(provider.id) !== null;
-      } catch {
-        // The fixed status below avoids exposing host or secret details.
+      if (provider.id === YANDEX_BOOKS_PROVIDER_ID) {
+        this.renderYandexOAuthSetup(new Setting(this.containerEl).setName("Yandex OAuth token"));
       }
-
       const setting = new Setting(this.containerEl)
-        .setName(provider.displayName)
-        .setDesc(configured ? "Configured" : "Not configured");
-      let input: TextComponent;
-      let connectionButton!: ButtonComponent;
-
-      setting.addText((text) => {
-        input = text;
-        this.credentialInputs.push(text);
-        text.inputEl.type = "password";
-        text.setPlaceholder(provider.id === YANDEX_BOOKS_PROVIDER_ID
-          ? "Yandex OAuth token"
-          : configured ? "Enter replacement credential" : "Enter credential");
-        text.onChange((value) => {
-          this.temporaryCredentials.set(provider.id, value);
-        });
-      });
-
-      setting
-        .addButton((button) => button
-          .setButtonText("Save or replace")
-          .setCta()
-          .onClick(() => {
-            this.invalidateConnectionTest(provider.id);
-            connectionButton.setDisabled(false);
-            setting.setDesc(configured ? "Configured" : "Not configured");
-            const credential = this.temporaryCredentials.get(provider.id)?.trim() ?? "";
-            if (credential === "") {
-              new Notice("Enter a credential before saving.");
-              return;
-            }
-            try {
-              this.credentials.set(provider.id, credential);
-              configured = true;
-              this.temporaryCredentials.delete(provider.id);
-              input.setValue("");
-              setting.setDesc("Configured");
-              new Notice(`${provider.displayName} credential saved.`);
-            } catch {
-              setting.setDesc("Could not save provider credential. Configuration unchanged.");
-              new Notice("Could not save the provider credential.");
-            }
-          }))
-        .addButton((button) => button
-          .setButtonText("Clear")
-          .onClick(() => {
-            this.invalidateConnectionTest(provider.id);
-            connectionButton.setDisabled(false);
-            setting.setDesc(configured ? "Configured" : "Not configured");
-            try {
-              this.credentials.clear(provider.id);
-              configured = false;
-              this.temporaryCredentials.delete(provider.id);
-              input.setValue("");
-              setting.setDesc("Not configured");
-              new Notice(`${provider.displayName} credential cleared.`);
-            } catch {
-              setting.setDesc("Could not clear provider credential. Configuration unchanged.");
-              new Notice("Could not clear the provider credential.");
-            }
-          }))
-        .addButton((button) => {
-          connectionButton = button;
-          button.setButtonText("Test connection")
-            .onClick(async () => {
-              const testGeneration = this.invalidateConnectionTest(provider.id);
-              button.setDisabled(true);
-              setting.setDesc("Testing connection...");
-              try {
-                const result = await this.imports.testCredential(provider);
-                if (this.isCurrentConnectionTest(provider.id, testGeneration, renderGeneration)) {
-                  setting.setDesc(result.ok ? "Connection successful" : connectionDescription(result.error));
-                }
-              } catch {
-                if (this.isCurrentConnectionTest(provider.id, testGeneration, renderGeneration)) {
-                  setting.setDesc("Provider unavailable. Retry the connection test.");
-                }
-              } finally {
-                if (this.isCurrentConnectionTest(provider.id, testGeneration, renderGeneration)) {
-                  button.setDisabled(false);
-                }
-              }
-            });
-        });
+        .setName(provider.displayName);
+      this.renderProviderSetting(setting, provider, renderGeneration);
     }
+  }
+
+  private renderProviderSetting(setting: Setting, provider: ReturnType<ProviderRegistry["all"]>[number], renderGeneration: number): void {
+    let configured = false;
+    try {
+      configured = this.credentials.get(provider.id) !== null;
+    } catch {
+      // The fixed status below avoids exposing host or secret details.
+    }
+    setting.setDesc(configured ? "Configured" : "Not configured");
+
+    let input: TextComponent;
+    let connectionButton!: ButtonComponent;
+
+    setting.addText((text) => {
+      input = text;
+      this.credentialInputs.push(text);
+      text.inputEl.type = "password";
+      text.setPlaceholder(provider.id === YANDEX_BOOKS_PROVIDER_ID
+        ? "Yandex OAuth token"
+        : configured ? "Enter replacement credential" : "Enter credential");
+      text.onChange((value) => {
+        this.temporaryCredentials.set(provider.id, value);
+      });
+    });
+
+    setting
+      .addButton((button) => button
+        .setButtonText("Save or replace")
+        .setCta()
+        .onClick(() => {
+          this.invalidateConnectionTest(provider.id);
+          connectionButton.setDisabled(false);
+          setting.setDesc(configured ? "Configured" : "Not configured");
+          const credential = this.temporaryCredentials.get(provider.id)?.trim() ?? "";
+          if (credential === "") {
+            new Notice("Enter a credential before saving.");
+            return;
+          }
+          try {
+            this.credentials.set(provider.id, credential);
+            configured = true;
+            this.temporaryCredentials.delete(provider.id);
+            input.setValue("");
+            setting.setDesc("Configured");
+            new Notice(`${provider.displayName} credential saved.`);
+          } catch {
+            setting.setDesc("Could not save provider credential. Configuration unchanged.");
+            new Notice("Could not save the provider credential.");
+          }
+        }))
+      .addButton((button) => button
+        .setButtonText("Clear")
+        .onClick(() => {
+          this.invalidateConnectionTest(provider.id);
+          connectionButton.setDisabled(false);
+          setting.setDesc(configured ? "Configured" : "Not configured");
+          try {
+            this.credentials.clear(provider.id);
+            configured = false;
+            this.temporaryCredentials.delete(provider.id);
+            input.setValue("");
+            setting.setDesc("Not configured");
+            new Notice(`${provider.displayName} credential cleared.`);
+          } catch {
+            setting.setDesc("Could not clear provider credential. Configuration unchanged.");
+            new Notice("Could not clear the provider credential.");
+          }
+        }))
+      .addButton((button) => {
+        connectionButton = button;
+        button.setButtonText("Test connection")
+          .onClick(async () => {
+            const testGeneration = this.invalidateConnectionTest(provider.id);
+            button.setDisabled(true);
+            setting.setDesc("Testing connection...");
+            try {
+              const result = await this.imports.testCredential(provider);
+              if (this.isCurrentConnectionTest(provider.id, testGeneration, renderGeneration)) {
+                setting.setDesc(result.ok ? "Connection successful" : connectionDescription(result.error));
+              }
+            } catch {
+              if (this.isCurrentConnectionTest(provider.id, testGeneration, renderGeneration)) {
+                setting.setDesc("Provider unavailable. Retry the connection test.");
+              }
+            } finally {
+              if (this.isCurrentConnectionTest(provider.id, testGeneration, renderGeneration)) {
+                button.setDisabled(false);
+              }
+            }
+          });
+      });
   }
 
   override hide(): void {
@@ -185,31 +227,31 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
     super.hide();
   }
 
-  private renderDefaultFolder(renderGeneration: number): void {
-    const setting = new Setting(this.containerEl)
+  private renderDefaultFolderSetting(setting: Setting, renderGeneration: number): void {
+    const statusSetting = setting
       .setName("Default import folder")
       .setDesc("Loading import settings...");
     let currentSettings: ImportSettings | undefined;
     let defaultFolder = "";
     let input!: TextComponent;
-    let saveTimer: ReturnType<typeof setTimeout> | undefined;
+    let saveTimer: number | undefined;
     let saveGeneration = 0;
 
     const scheduleSave = (): void => {
-      if (saveTimer !== undefined) clearTimeout(saveTimer);
+      if (saveTimer !== undefined) window.clearTimeout(saveTimer);
       const scheduledGeneration = ++saveGeneration;
-      saveTimer = setTimeout(() => {
+      saveTimer = window.setTimeout(() => {
         saveTimer = undefined;
         const savedFolder = defaultFolder;
         void this.settings.update((settings) => ({ ...settings, defaultFolder: savedFolder }))
           .then((updated) => {
             if (renderGeneration !== this.renderGeneration || scheduledGeneration !== saveGeneration) return;
             currentSettings = updated;
-            setting.setDesc("Default import folder saved.");
+            statusSetting.setDesc("Default import folder saved.");
           })
           .catch(() => {
             if (renderGeneration !== this.renderGeneration || scheduledGeneration !== saveGeneration) return;
-            setting.setDesc("Could not save default import folder.");
+            statusSetting.setDesc("Could not save default import folder.");
             new Notice("Could not save default import folder.");
           });
       }, 300);
@@ -217,7 +259,7 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
 
     this.defaultFolderCleanup = (): void => {
       saveGeneration += 1;
-      if (saveTimer !== undefined) clearTimeout(saveTimer);
+      if (saveTimer !== undefined) window.clearTimeout(saveTimer);
       saveTimer = undefined;
       this.defaultFolderSuggest?.close();
       this.defaultFolderSuggest = undefined;
@@ -231,7 +273,7 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
         .onChange((value) => {
           if (currentSettings === undefined || renderGeneration !== this.renderGeneration) return;
           defaultFolder = value;
-          setting.setDesc("Default import folder has unsaved changes.");
+          statusSetting.setDesc("Default import folder has unsaved changes.");
           scheduleSave();
         });
     });
@@ -240,7 +282,7 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
       this.defaultFolderSuggest = new FolderSuggest(this.appInstance, input.inputEl, folders, (value) => {
         defaultFolder = value;
         input.setValue(value);
-        setting.setDesc("Default import folder has unsaved changes.");
+        statusSetting.setDesc("Default import folder has unsaved changes.");
         scheduleSave();
       });
     }
@@ -250,16 +292,20 @@ export class BookHighlightsSettingsTab extends PluginSettingTab {
       currentSettings = loaded;
       defaultFolder = loaded.defaultFolder;
       input.setValue(loaded.defaultFolder).setDisabled(false);
-      setting.setDesc("Vault-relative folder used before any successful import.");
+      statusSetting.setDesc("Vault-relative folder used before any successful import.");
     }).catch(() => {
       if (renderGeneration !== this.renderGeneration) return;
-      setting.setDesc("Could not load import settings.");
+      statusSetting.setDesc("Could not load import settings.");
       new Notice("Could not load import settings.");
     });
   }
 
-  private renderYandexOAuthSetup(): void {
-    new Setting(this.containerEl)
+  private renderDefaultFolder(renderGeneration: number): void {
+    this.renderDefaultFolderSetting(new Setting(this.containerEl), renderGeneration);
+  }
+
+  private renderYandexOAuthSetup(setting: Setting): void {
+    setting
       .setName("Yandex OAuth token")
       .setDesc("To get a Yandex OAuth token, authorize Yandex, copy the y0_... token from the browser URL, and paste it into the field.")
       .addButton((button) => button

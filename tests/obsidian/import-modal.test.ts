@@ -33,6 +33,7 @@ interface FakeSetting {
 class FakeElement {
   text = "";
   readonly children: FakeElement[] = [];
+  readonly divChildren: FakeElement[] = [];
 
   constructor(readonly parent?: FakeElement) {}
 
@@ -48,6 +49,14 @@ class FakeElement {
     const child = new FakeElement(this);
     child.text = options?.text ?? "";
     this.children.push(child);
+    return child;
+  }
+
+  createDiv(options?: { text?: string }): FakeElement {
+    const child = new FakeElement(this);
+    child.text = options?.text ?? "";
+    this.children.push(child);
+    this.divChildren.push(child);
     return child;
   }
 
@@ -279,6 +288,25 @@ describe("import modal", () => {
     expect(search.inputEl.focused).toBe(true);
     expect(renderedSettings.map((setting) => setting.name)).toContain("Dune");
     expect(renderedSettings.map((setting) => setting.name)).not.toContain("Foundation");
+  });
+
+  it("uses Obsidian div helpers for book results", async () => {
+    const modal = new ImportBookHighlightsModal({} as App, {
+      registry: createProviderRegistry([provider]),
+      credentials: { get: (): string => "configured" },
+      settings: { load: (): Promise<ImportSettings> => Promise.resolve({ defaultFolder: "Books" }) },
+      imports: {
+        loadLibrary: (): ReturnType<ImportUseCase["loadLibrary"]> => Promise.resolve({ ok: true, value: [selectedBook] }),
+        prepareSnapshot: vi.fn(),
+        execute: vi.fn(),
+      },
+      openNote: vi.fn(() => Promise.resolve()),
+    });
+
+    modal.open();
+    await buttonNamed("Select").click();
+
+    expect((modal.contentEl as unknown as FakeElement).divChildren).toHaveLength(1);
   });
 
   it("drives provider, book, destination, importing, and completion with native controls", async () => {

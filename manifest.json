@@ -1,9 +1,9 @@
 {
   "id": "book-highlights-importer",
   "name": "Book Highlights Importer",
-  "version": "0.1.0",
-  "minAppVersion": "1.11.4",
-  "description": "Import book highlights and notes into managed Obsidian Markdown sections.",
+  "version": "0.1.1",
+  "minAppVersion": "1.13.0",
+  "description": "Import book highlights and notes into managed Markdown sections.",
   "author": "Evgeniy Yadlovskiy",
   "isDesktopOnly": false
 }
