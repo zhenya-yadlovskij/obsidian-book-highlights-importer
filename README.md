@@ -8,6 +8,8 @@ Book Highlights Importer is an Obsidian plugin that imports highlights and comme
 
 ![Book Highlights Importer demo](https://raw.githubusercontent.com/zhenya-yadlovskij/obsidian-book-highlights-importer/main/docs/assets/book-highlights-importer-demo.gif)
 
+[Watch the plugin demo GIF](https://raw.githubusercontent.com/zhenya-yadlovskij/obsidian-book-highlights-importer/main/docs/assets/book-highlights-importer-demo.gif)
+
 ## Features
 
 - Search your authenticated Yandex Books library by title or author.
