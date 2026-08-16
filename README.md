@@ -1,7 +1,7 @@
 # Book Highlights Importer
 
-![Plugin version 0.1.0](https://img.shields.io/badge/plugin-0.1.0-blue)
-![Minimum Obsidian version 1.11.4](https://img.shields.io/badge/Obsidian-1.11.4%2B-7c3aed)
+![Plugin version 0.1.1](https://img.shields.io/badge/plugin-0.1.1-blue)
+![Minimum Obsidian version 1.13.0](https://img.shields.io/badge/Obsidian-1.13.0%2B-7c3aed)
 [![MIT license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 Book Highlights Importer is an Obsidian plugin that imports highlights and comments from Yandex Books into Markdown notes.
@@ -17,13 +17,13 @@ Book Highlights Importer is an Obsidian plugin that imports highlights and comme
 - Import one book's highlights and comments through `Provider > Book > Destination`.
 - Choose a **Vault-relative folder** and filename, with a configurable default folder.
 - Replace only the plugin-owned **Managed Section** on re-import while preserving user Markdown and unrelated properties.
-- Run on Obsidian desktop and mobile, version 1.11.4 or newer.
+- Run on Obsidian desktop and mobile, version 1.13.0 or newer.
 
 ## Installation
 
 ### Manual installation
 
-No prebuilt release exists yet. To build and install the plugin manually:
+To build and install a development version manually:
 
 1. Clone this repository.
 2. Run `npm ci`.
@@ -35,7 +35,7 @@ No prebuilt release exists yet. To build and install the plugin manually:
 
 ### Community Plugins
 
-Catalog installation is not available yet. After publication, users will be able to search for Book Highlights Importer in Obsidian's Community Plugins browser.
+Search for Book Highlights Importer in Obsidian's Community Plugins browser, then install and enable it.
 
 ## Setup
 
