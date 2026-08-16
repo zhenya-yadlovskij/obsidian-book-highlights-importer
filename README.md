@@ -6,7 +6,7 @@
 
 Book Highlights Importer is an Obsidian plugin that imports highlights and comments from Yandex Books into Markdown notes.
 
-<!-- Demo GIF: docs/assets/book-highlights-importer-demo.gif -->
+![Book Highlights Importer demo](https://raw.githubusercontent.com/zhenya-yadlovskij/obsidian-book-highlights-importer/main/docs/assets/book-highlights-importer-demo.gif)
 
 ## Features
 
